@@ -209,6 +209,8 @@ customCursor.AnchorPoint=Vector2.new(0.5,0.5)
 customCursor.ZIndex=9999
 customCursor.BackgroundTransparency=1
 customCursor.Visible=true
+customCursor.Active=false
+customCursor.Selectable=false
 round(customCursor,999)
 
 local cursorTrail={}
@@ -217,6 +219,8 @@ for i=1,5 do
 	trail.AnchorPoint=Vector2.new(0.5,0.5)
 	trail.ZIndex=9998
 	trail.BackgroundTransparency=0.5
+	trail.Active=false
+	trail.Selectable=false
 	round(trail,999)
 	trail.Visible=true
 	table.insert(cursorTrail,{frame=trail,pos=Vector2.new(0,0),delay=i*0.03})
