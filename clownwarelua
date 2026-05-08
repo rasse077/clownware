@@ -1,1 +1,1196 @@
 
+local UIS=game:GetService("UserInputService")
+local TweenService=game:GetService("TweenService")
+local Lighting=game:GetService("Lighting")
+local Players=game:GetService("Players")
+local RunService=game:GetService("RunService")
+local Workspace=game:GetService("Workspace")
+local Camera=Workspace.CurrentCamera
+
+local Player=Players.LocalPlayer
+local PlayerGui=Player:WaitForChild("PlayerGui")
+
+pcall(function()
+	if PlayerGui:FindFirstChild("ClownwareUI") then
+		PlayerGui.ClownwareUI:Destroy()
+	end
+end)
+
+local blur=Lighting:FindFirstChild("ClownwareBlur") or Instance.new("BlurEffect")
+blur.Name="ClownwareBlur"
+blur.Parent=Lighting
+blur.Size=0
+blur.Enabled=false
+
+local gui=Instance.new("ScreenGui")
+gui.Name="ClownwareUI"
+gui.ResetOnSpawn=false
+gui.IgnoreGuiInset=true
+gui.ZIndexBehavior=Enum.ZIndexBehavior.Sibling
+gui.Parent=PlayerGui
+
+local function round(o,r)
+	local c=Instance.new("UICorner")
+	c.CornerRadius=UDim.new(0,r)
+	c.Parent=o
+end
+
+local function stroke(o,t,c,a)
+	local s=Instance.new("UIStroke")
+	s.Thickness=t
+	s.Color=c
+	s.Transparency=a or 0
+	s.Parent=o
+end
+
+local function frame(p,x,y,w,h,c)
+	local f=Instance.new("Frame")
+	f.Parent=p
+	f.BorderSizePixel=0
+	f.BackgroundColor3=c
+	f.Position=UDim2.new(0,x,0,y)
+	f.Size=UDim2.new(0,w,0,h)
+	return f
+end
+
+local function txt(p,t,s,x,y,w,h,c,f,a)
+	local l=Instance.new("TextLabel")
+	l.Parent=p
+	l.BackgroundTransparency=1
+	l.Text=t
+	l.TextSize=s
+	l.TextColor3=c
+	l.Font=f or Enum.Font.Code
+	l.Position=UDim2.new(0,x,0,y)
+	l.Size=UDim2.new(0,w,0,h)
+	l.TextXAlignment=a or Enum.TextXAlignment.Left
+	return l
+end
+
+local function btn(p,t,x,y,w,h)
+	local b=Instance.new("TextButton")
+	b.Parent=p
+	b.Text=t
+	b.TextSize=15
+	b.Font=Enum.Font.Code
+	b.TextColor3=Color3.fromRGB(235,235,235)
+	b.BackgroundColor3=Color3.fromRGB(16,16,16)
+	b.AutoButtonColor=false
+	b.Position=UDim2.new(0,x,0,y)
+	b.Size=UDim2.new(0,w,0,h)
+	round(b,4)
+	stroke(b,1,Color3.fromRGB(55,55,55),0)
+	return b
+end
+
+local function textbox(p,ph,x,y,w,h)
+	local bx=frame(p,x,y,w,h,Color3.fromRGB(20,20,20))
+	round(bx,4)
+	stroke(bx,1,Color3.fromRGB(55,55,55),0)
+	local tb=Instance.new("TextBox")
+	tb.Parent=bx
+	tb.Size=UDim2.new(1,-10,1,0)
+	tb.Position=UDim2.new(0,5,0,0)
+	tb.BackgroundTransparency=1
+	tb.TextColor3=Color3.fromRGB(235,235,235)
+	tb.TextSize=14
+	tb.Font=Enum.Font.Code
+	tb.Text=""
+	tb.PlaceholderText=ph
+	tb.PlaceholderColor3=Color3.fromRGB(100,100,100)
+	return tb
+end
+
+local function copyToClipboard(text)
+	local success=false
+	if setclipboard then
+		setclipboard(text)
+		success=true
+	elseif toclipboard then
+		toclipboard(text)
+		success=true
+	elseif syn and syn.clipboard then
+		syn.clipboard(text)
+		success=true
+	elseif Clipboard then
+		Clipboard(text)
+		success=true
+	end
+	return success
+end
+
+local function checkbox(p,x,y,text,callback)
+	local box=frame(p,x,y,18,18,Color3.fromRGB(16,16,16))
+	round(box,4)
+	stroke(box,1,Color3.fromRGB(55,55,55),0)
+	local check=txt(box,"✓",16,0,0,18,18,Color3.fromRGB(0,255,100),Enum.Font.Code,Enum.TextXAlignment.Center)
+	check.Visible=false
+	local lbl=txt(p,text,14,x+26,y+1,200,18,Color3.fromRGB(230,230,230),Enum.Font.Code)
+	local state=false
+	local function toggle()
+		state=not state
+		check.Visible=state
+		if callback then callback(state) end
+	end
+	box.InputBegan:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 then
+			toggle()
+		end
+	end)
+	lbl.InputBegan:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 then
+			toggle()
+		end
+	end)
+	return {
+		box=box,
+		check=check,
+		lbl=lbl,
+		Set=function(v)
+			state=v
+			check.Visible=v
+			if callback then callback(v) end
+		end,
+		Get=function() return state end
+	}
+end
+
+local function slider(p,x,y,w,min,max,default,callback)
+	local track=frame(p,x,y,w,6,Color3.fromRGB(30,30,30))
+	round(track,3)
+	local fill=frame(track,0,0,0,6,Color3.fromRGB(255,255,255))
+	round(fill,3)
+	local knob=frame(track,0,-5,12,16,Color3.fromRGB(255,255,255))
+	round(knob,4)
+	knob.AnchorPoint=Vector2.new(0.5,0)
+	local val=txt(p,tostring(default),14,x+w+10,y-3,40,16,Color3.fromRGB(200,200,200),Enum.Font.Code)
+	local value=default
+	local dragging=false
+	local function updateKnob()
+		local percent=(value-min)/(max-min)
+		fill.Size=UDim2.new(percent,0,1,0)
+		knob.Position=UDim2.new(percent,0,0,0)
+		val.Text=tostring(math.floor(value*10)/10)
+	end
+	updateKnob()
+	knob.InputBegan:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 then
+			dragging=true
+		end
+	end)
+	UIS.InputEnded:Connect(function(i)
+		if i.UserInputType==Enum.UserInputType.MouseButton1 then
+			dragging=false
+		end
+	end)
+	UIS.InputChanged:Connect(function(i)
+		if dragging and i.UserInputType==Enum.UserInputType.MouseMovement then
+			local mousePos=UIS:GetMouseLocation()
+			local absPos=track.AbsolutePosition
+			local absSize=track.AbsoluteSize
+			local percent=math.clamp((mousePos.X-absPos.X)/absSize.X,0,1)
+			value=min+percent*(max-min)
+			value=math.floor(value*100)/100
+			updateKnob()
+			if callback then callback(value) end
+		end
+	end)
+	return {
+		Get=function() return value end,
+		Set=function(v) value=v updateKnob() if callback then callback(v) end end,
+		track=track
+	}
+end
+
+local cursor=frame(gui,0,0,8,8,Color3.fromRGB(255,255,255))
+cursor.AnchorPoint=Vector2.new(0.5,0.5)
+cursor.ZIndex=9999
+round(cursor,999)
+
+local mousePos=UIS:GetMouseLocation()
+cursor.Position=UDim2.fromOffset(mousePos.X,mousePos.Y)
+
+RunService.RenderStepped:Connect(function()
+	local pos=UIS:GetMouseLocation()
+	mousePos=mousePos:Lerp(pos,0.35)
+	cursor.Position=UDim2.fromOffset(mousePos.X,pos.Y)
+end)
+
+local main=frame(gui,0,0,770,520,Color3.fromRGB(7,7,7))
+main.AnchorPoint=Vector2.new(0.5,0.5)
+main.Position=UDim2.new(0.5,0,0.5,0)
+round(main,6)
+stroke(main,1,Color3.fromRGB(40,40,40),0)
+
+local loginFrame=frame(gui,0,0,770,520,Color3.fromRGB(7,7,7))
+loginFrame.AnchorPoint=Vector2.new(0.5,0.5)
+loginFrame.Position=UDim2.new(0.5,0,0.5,0)
+round(loginFrame,6)
+stroke(loginFrame,1,Color3.fromRGB(40,40,40),0)
+
+local loginTop=frame(loginFrame,0,0,770,50,Color3.fromRGB(6,6,6))
+round(loginTop,6)
+txt(loginTop,"Clownware Login",28,22,6,350,24,Color3.fromRGB(255,255,255),Enum.Font.Code)
+
+local loginCard=frame(loginFrame,0,0,400,250,Color3.fromRGB(10,10,10))
+loginCard.AnchorPoint=Vector2.new(0.5,0.5)
+loginCard.Position=UDim2.new(0.5,0,0.5,-20)
+round(loginCard,6)
+stroke(loginCard,1,Color3.fromRGB(45,45,45),0)
+
+txt(loginCard,"Enter License Key",20,100,20,200,22,Color3.fromRGB(255,255,255),Enum.Font.Code,Enum.TextXAlignment.Center)
+
+local keyBox=textbox(loginCard,"Paste your key here",80,60,240,35)
+
+local loginStatus=txt(loginCard,"",14,100,105,200,18,Color3.fromRGB(255,255,255),Enum.Font.Code,Enum.TextXAlignment.Center)
+
+local loginButton=btn(loginCard,"Login",110,140,180,40)
+loginButton.TextSize=16
+
+local copyButton=btn(loginCard,"Get Key (Copy Link)",110,195,180,35)
+copyButton.TextSize=13
+
+local validKey="SYN-sfghdghdfgu3-3j14h-f3h39"
+local isLoggedIn=false
+local keyConfigFile="clownkey.json"
+
+local function saveKeyToFile(key)
+	if writefile and isfile then
+		local data={key=key}
+		writefile(keyConfigFile,game:GetService("HttpService"):JSONEncode(data))
+	end
+end
+
+local function loadKeyFromFile()
+	if not isfile or not isfile(keyConfigFile) then return nil end
+	local success,data=pcall(function()
+		return game:GetService("HttpService"):JSONDecode(readfile(keyConfigFile))
+	end)
+	if success and data and data.key then
+		return data.key
+	end
+	return nil
+end
+
+copyButton.MouseButton1Click:Connect(function()
+	copyToClipboard("https://direct-link.net/5635067/dQLXy1KlsNDf")
+	loginStatus.Text="Link copied!"
+	loginStatus.TextColor3=Color3.fromRGB(0,255,100)
+	task.wait(2)
+	loginStatus.Text=""
+end)
+
+local top=frame(main,0,0,770,50,Color3.fromRGB(6,6,6))
+round(top,6)
+
+txt(top,"Clownware",28,22,6,260,24,Color3.fromRGB(255,255,255),Enum.Font.Code)
+txt(top,"dhttps://discord.gg/mWf7HCprMP",14,24,28,250,16,Color3.fromRGB(130,130,130),Enum.Font.Code)
+
+local left=frame(main,0,50,220,430,Color3.fromRGB(5,5,5))
+frame(main,220,50,1,430,Color3.fromRGB(28,28,28))
+local bottom=frame(main,0,480,770,40,Color3.fromRGB(10,10,10))
+txt(bottom,"Version: 1.2.3",14,20,10,320,20,Color3.fromRGB(120,120,120),Enum.Font.Code)
+
+local content=frame(main,221,50,549,430,Color3.fromRGB(6,6,6))
+
+local tabs={
+	{"Aimbot",20},
+	{"Movement",62},
+	{"Visuals",104},
+	{"Settings",146}
+}
+
+local pages={}
+local tabButtons={}
+
+for i,v in ipairs(tabs) do
+	local b=btn(left,"   "..v[1],12,v[2],196,34)
+	b.TextXAlignment=Enum.TextXAlignment.Left
+	if i==1 then
+		b.BackgroundColor3=Color3.fromRGB(22,22,22)
+	end
+	tabButtons[i]=b
+
+	local p=frame(content,0,0,549,430,Color3.fromRGB(6,6,6))
+	p.Visible=i==1
+	pages[i]=p
+end
+
+local function selectTab(id)
+	for i,v in ipairs(pages) do
+		v.Visible=i==id
+		tabButtons[i].BackgroundColor3=i==id and Color3.fromRGB(22,22,22) or Color3.fromRGB(5,5,5)
+	end
+end
+
+for i,v in ipairs(tabButtons) do
+	v.MouseButton1Click:Connect(function()
+		selectTab(i)
+	end)
+end
+
+txt(pages[1],"Aimbot",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
+
+local aimbotEnabled=false
+local aimbotTarget="Head"
+local aimbotFov=200
+local aimbotSmoothness=1
+local triggerBotEnabled=false
+
+local aimbotConn=nil
+local triggerBotConn=nil
+local aimbotCB=nil
+local aimbotDropdown=nil
+local aimbotFovSlider=nil
+local aimbotSmoothSlider=nil
+local triggerBotCB=nil
+local targetIdx=1
+local targetParts={"Head","Torso","HumanoidRootPart","LeftHand","RightHand","LeftFoot","RightFoot"}
+
+local function getClosestPlayerInFov()
+	local closest=nil
+	local closestDist=aimbotFov
+	local camPos=Camera.CFrame.Position
+	local camLook=Camera.CFrame.LookVector
+	for _,plr in ipairs(Players:GetPlayers()) do
+		if plr~=Player and plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health>0 then
+			local part=plr.Character:FindFirstChild(aimbotTarget) or plr.Character:FindFirstChild("HumanoidRootPart")
+			if part then
+				local pos=part.Position
+				local dir=(pos-camPos).Unit
+				local angle=math.acos(math.clamp(camLook:Dot(dir),-1,1))
+				local dist=math.deg(angle)
+				if dist<closestDist then
+					closest=plr
+					closestDist=dist
+				end
+			end
+		end
+	end
+	return closest
+end
+
+local function fireTool()
+	local tool=Player.Character and Player.Character:FindFirstChildOfClass("Tool")
+	if tool and tool:FindFirstChild("Handle") then
+		if tool.Enabled then
+			tool:Activate()
+			task.wait(0.05)
+			if tool.Parent then
+				tool:Deactivate()
+			end
+		end
+	end
+end
+
+aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
+	aimbotEnabled=state
+	if aimbotEnabled then
+		if aimbotConn then aimbotConn:Disconnect() end
+		aimbotConn=RunService.RenderStepped:Connect(function()
+			if aimbotEnabled then
+				local target=getClosestPlayerInFov()
+				if target and target.Character then
+					local aimPart=target.Character:FindFirstChild(aimbotTarget) or target.Character:FindFirstChild("HumanoidRootPart")
+					if aimPart then
+						local targetCF=CFrame.new(Camera.CFrame.Position,aimPart.Position)
+						Camera.CFrame=Camera.CFrame:Lerp(targetCF,math.clamp(aimbotSmoothness/10,0.1,1))
+					end
+				end
+			end
+		end)
+	else
+		if aimbotConn then
+			aimbotConn:Disconnect()
+			aimbotConn=nil
+		end
+	end
+end)
+
+triggerBotCB=checkbox(pages[1],20,90,"Trigger Bot",function(state)
+	triggerBotEnabled=state
+	if triggerBotEnabled then
+		if triggerBotConn then triggerBotConn:Disconnect() end
+		triggerBotConn=RunService.RenderStepped:Connect(function()
+			if triggerBotEnabled then
+				local target=getClosestPlayerInFov()
+				if target and target.Character then
+					local aimPart=target.Character:FindFirstChild(aimbotTarget) or target.Character:FindFirstChild("HumanoidRootPart")
+					if aimPart then
+						local screenPos,onScreen=Camera:WorldToViewportPoint(aimPart.Position)
+						if onScreen then
+							local mousePos=UIS:GetMouseLocation()
+							local dist=(Vector2.new(screenPos.X,screenPos.Y)-mousePos).Magnitude
+							if dist<30 then
+								fireTool()
+							end
+						end
+					end
+				end
+			end
+		end)
+	else
+		if triggerBotConn then
+			triggerBotConn:Disconnect()
+			triggerBotConn=nil
+		end
+	end
+end)
+
+txt(pages[1],"Target",14,20,130,80,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+aimbotDropdown=btn(pages[1],targetParts[targetIdx],20,150,200,30)
+aimbotDropdown.MouseButton1Click:Connect(function()
+	targetIdx=targetIdx+1
+	if targetIdx>#targetParts then targetIdx=1 end
+	aimbotDropdown.Text=targetParts[targetIdx]
+	aimbotTarget=targetParts[targetIdx]
+end)
+
+txt(pages[1],"Aimbot FOV",14,20,195,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+aimbotFovSlider=slider(pages[1],20,215,200,30,500,200,function(v)
+	aimbotFov=v
+end)
+
+txt(pages[1],"Smoothness",14,20,260,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+aimbotSmoothSlider=slider(pages[1],20,280,200,0.1,10,1,function(v)
+	aimbotSmoothness=v
+end)
+
+txt(pages[2],"Movement",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
+
+local flyEnabled=false
+local flySpeed=50
+local flyConn=nil
+local flyingBodyGyro=nil
+local flyingBodyVel=nil
+local flyKeys={}
+local noClipEnabled=false
+local noclipConn=nil
+local superJumpEnabled=false
+local superSprintEnabled=false
+local superSprintSpeed=30
+local rapidFireEnabled=false
+local rapidFireConn=nil
+
+local flyCB=nil
+local flySpeedSlider=nil
+local superJumpCB=nil
+local noClipCB=nil
+local superSprintCB=nil
+local superSprintSlider=nil
+local rapidFireCB=nil
+
+local function startFly()
+	local char=Player.Character
+	if not char or not char:FindFirstChild("HumanoidRootPart") then return end
+	local root=char.HumanoidRootPart
+	local hum=char:FindFirstChild("Humanoid")
+	if not hum then return end
+	hum.PlatformStand=true
+	flyingBodyGyro=Instance.new("BodyGyro")
+	flyingBodyGyro.Name="FlyGyro"
+	flyingBodyGyro.P=0
+	flyingBodyGyro.MaxTorque=Vector3.new(0,0,0)
+	flyingBodyGyro.CFrame=Camera.CFrame
+	flyingBodyGyro.Parent=root
+	flyingBodyVel=Instance.new("BodyVelocity")
+	flyingBodyVel.Name="FlyVel"
+	flyingBodyVel.Velocity=Vector3.zero
+	flyingBodyVel.MaxForce=Vector3.new(4000,4000,4000)
+	flyingBodyVel.Parent=root
+	flyKeys={W=false,A=false,S=false,D=false,E=false,Q=false}
+	local function updateMove()
+		local moveDir=Vector3.zero
+		if flyKeys.W then moveDir=moveDir+Camera.CFrame.LookVector end
+		if flyKeys.S then moveDir=moveDir-Camera.CFrame.LookVector end
+		if flyKeys.A then moveDir=moveDir-Camera.CFrame.RightVector end
+		if flyKeys.D then moveDir=moveDir+Camera.CFrame.RightVector end
+		if flyKeys.E then moveDir=moveDir+Vector3.new(0,1,0) end
+		if flyKeys.Q then moveDir=moveDir+Vector3.new(0,-1,0) end
+		if moveDir.Magnitude>0 then moveDir=moveDir.Unit end
+		if flyingBodyVel and flyingBodyVel.Parent then
+			flyingBodyVel.Velocity=moveDir*flySpeed
+		end
+		if flyingBodyGyro and flyingBodyGyro.Parent then
+			flyingBodyGyro.CFrame=Camera.CFrame
+		end
+	end
+	flyConn=RunService.RenderStepped:Connect(updateMove)
+	local keyBegan
+	local keyEnded
+	keyBegan=UIS.InputBegan:Connect(function(i,gp)
+		if gp then return end
+		if i.KeyCode==Enum.KeyCode.W then flyKeys.W=true
+		elseif i.KeyCode==Enum.KeyCode.A then flyKeys.A=true
+		elseif i.KeyCode==Enum.KeyCode.S then flyKeys.S=true
+		elseif i.KeyCode==Enum.KeyCode.D then flyKeys.D=true
+		elseif i.KeyCode==Enum.KeyCode.E then flyKeys.E=true
+		elseif i.KeyCode==Enum.KeyCode.Q then flyKeys.Q=true
+		end
+	end)
+	keyEnded=UIS.InputEnded:Connect(function(i,gp)
+		if gp then return end
+		if i.KeyCode==Enum.KeyCode.W then flyKeys.W=false
+		elseif i.KeyCode==Enum.KeyCode.A then flyKeys.A=false
+		elseif i.KeyCode==Enum.KeyCode.S then flyKeys.S=false
+		elseif i.KeyCode==Enum.KeyCode.D then flyKeys.D=false
+		elseif i.KeyCode==Enum.KeyCode.E then flyKeys.E=false
+		elseif i.KeyCode==Enum.KeyCode.Q then flyKeys.Q=false
+		end
+	end)
+end
+
+local function stopFly()
+	if flyingBodyGyro then flyingBodyGyro:Destroy() flyingBodyGyro=nil end
+	if flyingBodyVel then flyingBodyVel:Destroy() flyingBodyVel=nil end
+	if flyConn then flyConn:Disconnect() flyConn=nil end
+	if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+		Player.Character.Humanoid.PlatformStand=false
+	end
+end
+
+flyCB=checkbox(pages[2],20,60,"Fly",function(state)
+	flyEnabled=state
+	if flyEnabled then
+		startFly()
+	else
+		stopFly()
+	end
+end)
+
+txt(pages[2],"Fly Speed",14,20,100,80,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+flySpeedSlider=slider(pages[2],20,120,200,10,200,50,function(v)
+	flySpeed=v
+end)
+
+superJumpCB=checkbox(pages[2],20,155,"Super Jump",function(state)
+	superJumpEnabled=state
+	if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+		Player.Character.Humanoid.JumpPower=state and 200 or 50
+	end
+end)
+
+noClipCB=checkbox(pages[2],20,195,"NoClip",function(state)
+	noClipEnabled=state
+	if noClipEnabled then
+		noclipConn=RunService.Stepped:Connect(function()
+			if noClipEnabled and Player.Character then
+				for _,v in ipairs(Player.Character:GetDescendants()) do
+					if v:IsA("BasePart") and v.CanCollide then
+						v.CanCollide=false
+					end
+				end
+			end
+		end)
+	else
+		if noclipConn then noclipConn:Disconnect() noclipConn=nil end
+	end
+end)
+
+superSprintCB=checkbox(pages[2],20,235,"Super Sprint",function(state)
+	superSprintEnabled=state
+	if Player.Character and Player.Character:FindFirstChild("Humanoid") then
+		if state then
+			Player.Character.Humanoid.WalkSpeed=superSprintSpeed
+		else
+			Player.Character.Humanoid.WalkSpeed=16
+		end
+	end
+end)
+
+txt(pages[2],"Sprint Speed",14,20,270,80,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+superSprintSlider=slider(pages[2],20,290,200,16,100,30,function(v)
+	superSprintSpeed=v
+	if superSprintEnabled and Player.Character and Player.Character:FindFirstChild("Humanoid") then
+		Player.Character.Humanoid.WalkSpeed=v
+	end
+end)
+
+rapidFireCB=checkbox(pages[2],20,325,"Rapid Fire",function(state)
+	rapidFireEnabled=state
+	if rapidFireEnabled then
+		if rapidFireConn then rapidFireConn:Disconnect() end
+		rapidFireConn=RunService.RenderStepped:Connect(function()
+			if rapidFireEnabled and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+				fireTool()
+			end
+		end)
+	else
+		if rapidFireConn then
+			rapidFireConn:Disconnect()
+			rapidFireConn=nil
+		end
+	end
+end)
+
+Player.CharacterAdded:Connect(function(char)
+	wait(0.5)
+	if superJumpEnabled and char:FindFirstChild("Humanoid") then
+		char.Humanoid.JumpPower=200
+	end
+	if superSprintEnabled and char:FindFirstChild("Humanoid") then
+		char.Humanoid.WalkSpeed=superSprintSpeed
+	end
+	if flyEnabled then
+		stopFly()
+		wait(0.2)
+		startFly()
+	end
+	if rapidFireEnabled then
+		if rapidFireConn then
+			rapidFireConn:Disconnect()
+			rapidFireConn=nil
+		end
+		rapidFireConn=RunService.RenderStepped:Connect(function()
+			if rapidFireEnabled and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+				fireTool()
+			end
+		end)
+	end
+end)
+
+txt(pages[3],"Visuals",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
+
+local espEnabled=false
+local espColor=Color3.fromRGB(0,0,0)
+local tracersEnabled=false
+local fovCircleEnabled=false
+local fovCircleColor=Color3.fromRGB(0,0,0)
+local tracerColor=Color3.fromRGB(255,255,255)
+local fovRadius=200
+
+local espCB=nil
+local tracersCB=nil
+local fovCircleCB=nil
+local fovRadiusSlider=nil
+local espRefreshConn=nil
+
+local fovCircle=Drawing.new("Circle")
+fovCircle.Visible=false
+fovCircle.Color=fovCircleColor
+fovCircle.Thickness=1
+fovCircle.Transparency=0.7
+fovCircle.Radius=fovRadius
+fovCircle.Position=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
+
+local tracers={}
+
+local function addHighlight(character)
+	if not character then return end
+	if character:FindFirstChild("ClownESP") then
+		character.ClownESP.OutlineColor=espColor
+		return
+	end
+	local highlight=Instance.new("Highlight")
+	highlight.Name="ClownESP"
+	highlight.FillTransparency=1
+	highlight.OutlineColor=espColor
+	highlight.OutlineTransparency=0
+	highlight.DepthMode=Enum.HighlightDepthMode.AlwaysOnTop
+	highlight.Parent=character
+end
+
+local function updateAllHighlights()
+	for _,plr in ipairs(Players:GetPlayers()) do
+		if plr~=Player and plr.Character and plr.Character:FindFirstChild("ClownESP") then
+			plr.Character.ClownESP.OutlineColor=espColor
+		end
+	end
+end
+
+local function refreshAllESP()
+	if not espEnabled then return end
+	for _,plr in ipairs(Players:GetPlayers()) do
+		if plr~=Player and plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health>0 then
+			if plr.Character:FindFirstChild("ClownESP") then
+				plr.Character.ClownESP.OutlineColor=espColor
+			else
+				addHighlight(plr.Character)
+			end
+		end
+	end
+end
+
+local function updateTracers()
+	for plr,drawing in pairs(tracers) do
+		if drawing then
+			drawing.Visible=false
+			drawing:Remove()
+			tracers[plr]=nil
+		end
+	end
+	if not tracersEnabled then return end
+	for _,plr in ipairs(Players:GetPlayers()) do
+		if plr~=Player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health>0 then
+			local root=plr.Character.HumanoidRootPart
+			local screenPos,onScreen=Camera:WorldToViewportPoint(root.Position)
+			if onScreen then
+				local line=Drawing.new("Line")
+				line.Color=tracerColor
+				line.Thickness=1
+				line.Transparency=0.5
+				line.From=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y)
+				line.To=Vector2.new(screenPos.X,screenPos.Y)
+				line.Visible=true
+				tracers[plr]=line
+			end
+		end
+	end
+end
+
+Players.PlayerAdded:Connect(function(plr)
+	plr.CharacterAdded:Connect(function(char)
+		if espEnabled then
+			wait(0.1)
+			addHighlight(char)
+		end
+	end)
+end)
+
+espCB=checkbox(pages[3],20,60,"Player ESP",function(state)
+	espEnabled=state
+	if espEnabled then
+		refreshAllESP()
+		if espRefreshConn then espRefreshConn:Disconnect() end
+		espRefreshConn=RunService.Heartbeat:Connect(function()
+			refreshAllESP()
+			wait(1)
+		end)
+	else
+		if espRefreshConn then espRefreshConn:Disconnect() espRefreshConn=nil end
+		for _,plr in ipairs(Players:GetPlayers()) do
+			if plr.Character and plr.Character:FindFirstChild("ClownESP") then
+				plr.Character.ClownESP:Destroy()
+			end
+		end
+	end
+end)
+
+txt(pages[3],"ESP Color",14,20,95,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+local espColors={Color3.fromRGB(0,0,0),Color3.fromRGB(255,255,255),Color3.fromRGB(255,0,0),Color3.fromRGB(0,255,0),Color3.fromRGB(0,0,255),Color3.fromRGB(255,255,0),Color3.fromRGB(255,0,255),Color3.fromRGB(0,255,255)}
+for i,col in ipairs(espColors) do
+	local cbtn=frame(pages[3],20+(i-1)*30,115,22,22,col)
+	round(cbtn,3)
+	cbtn.InputBegan:Connect(function(input)
+		if input.UserInputType==Enum.UserInputType.MouseButton1 then
+			espColor=col
+			updateAllHighlights()
+		end
+	end)
+end
+
+tracersCB=checkbox(pages[3],20,150,"Tracers",function(state)
+	tracersEnabled=state
+	if not tracersEnabled then
+		for plr,drawing in pairs(tracers) do
+			if drawing then
+				drawing:Remove()
+				tracers[plr]=nil
+			end
+		end
+	end
+end)
+
+txt(pages[3],"Tracer Color",14,20,185,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+local tracerColors={Color3.fromRGB(255,255,255),Color3.fromRGB(0,0,0),Color3.fromRGB(255,0,0),Color3.fromRGB(0,255,0),Color3.fromRGB(0,0,255),Color3.fromRGB(255,255,0),Color3.fromRGB(255,0,255),Color3.fromRGB(0,255,255)}
+for i,col in ipairs(tracerColors) do
+	local cbtn=frame(pages[3],20+(i-1)*30,205,22,22,col)
+	round(cbtn,3)
+	cbtn.InputBegan:Connect(function(input)
+		if input.UserInputType==Enum.UserInputType.MouseButton1 then
+			tracerColor=col
+		end
+	end)
+end
+
+fovCircleCB=checkbox(pages[3],20,240,"FOV Circle",function(state)
+	fovCircleEnabled=state
+	fovCircle.Visible=state
+end)
+
+txt(pages[3],"FOV Radius",14,20,270,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+fovRadiusSlider=slider(pages[3],20,290,200,30,500,200,function(v)
+	fovRadius=v
+end)
+
+txt(pages[3],"FOV Color",14,20,325,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+local fovColors={Color3.fromRGB(0,0,0),Color3.fromRGB(255,255,255),Color3.fromRGB(255,0,0),Color3.fromRGB(0,255,0),Color3.fromRGB(0,0,255),Color3.fromRGB(255,255,0),Color3.fromRGB(255,0,255),Color3.fromRGB(0,255,255)}
+for i,col in ipairs(fovColors) do
+	local cbtn=frame(pages[3],20+(i-1)*30,345,22,22,col)
+	round(cbtn,3)
+	cbtn.InputBegan:Connect(function(input)
+		if input.UserInputType==Enum.UserInputType.MouseButton1 then
+			fovCircleColor=col
+		end
+	end)
+end
+
+RunService.RenderStepped:Connect(function()
+	if fovCircleEnabled then
+		fovCircle.Radius=fovRadius
+		fovCircle.Color=fovCircleColor
+		fovCircle.Position=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
+		fovCircle.Visible=true
+	else
+		fovCircle.Visible=false
+	end
+	updateTracers()
+end)
+
+txt(pages[4],"Settings",18,20,16,160,18,Color3.fromRGB(255,255,255),Enum.Font.Code)
+
+local blurOn=false
+local blurToggle=btn(pages[4],"",20,42,18,18)
+blurToggle.TextSize=16
+txt(pages[4],"Enable Blur",16,46,42,160,18,Color3.fromRGB(230,230,230),Enum.Font.Code)
+
+blurToggle.MouseButton1Click:Connect(function()
+	blurOn=not blurOn
+	blurToggle.Text=blurOn and "✓" or ""
+	if blurOn and main.Visible then
+		blur.Enabled=true
+		TweenService:Create(blur,TweenInfo.new(.2),{Size=18}):Play()
+	elseif not blurOn then
+		local tw=TweenService:Create(blur,TweenInfo.new(.2),{Size=0})
+		tw:Play()
+		tw.Completed:Connect(function()
+			if not blurOn then
+				blur.Enabled=false
+			end
+		end)
+	end
+end)
+
+local fieldOfView=70
+txt(pages[4],"Field of View",14,20,80,120,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+local fovSlider=slider(pages[4],20,100,200,30,120,70,function(v)
+	fieldOfView=v
+	Camera.FieldOfView=v
+end)
+
+local watermarkEnabled=false
+local autoExecuteEnabled=false
+local watermarkText="Clownware | discord.gg/clownffware"
+
+local watermarkCB=nil
+local autoExecuteCB=nil
+
+watermarkCB=checkbox(pages[4],20,145,"Watermark",function(state)
+	watermarkEnabled=state
+	if watermarkGui then watermarkGui.Enabled=state end
+end)
+
+autoExecuteCB=checkbox(pages[4],20,180,"Auto-Execute",function(state)
+	autoExecuteEnabled=state
+end)
+
+local configName="ClownwareConfig"
+local function saveConfig()
+	local config={
+		aimbotEnabled=aimbotEnabled,
+		triggerBotEnabled=triggerBotEnabled,
+		aimbotTarget=aimbotTarget,
+		aimbotFov=aimbotFov,
+		aimbotSmoothness=aimbotSmoothness,
+		targetIdx=targetIdx,
+		flyEnabled=flyEnabled,
+		flySpeed=flySpeed,
+		superJumpEnabled=superJumpEnabled,
+		noClipEnabled=noClipEnabled,
+		superSprintEnabled=superSprintEnabled,
+		superSprintSpeed=superSprintSpeed,
+		rapidFireEnabled=rapidFireEnabled,
+		espEnabled=espEnabled,
+		espColorR=espColor.R,
+		espColorG=espColor.G,
+		espColorB=espColor.B,
+		tracersEnabled=tracersEnabled,
+		tracerColorR=tracerColor.R,
+		tracerColorG=tracerColor.G,
+		tracerColorB=tracerColor.B,
+		fovCircleEnabled=fovCircleEnabled,
+		fovCircleColorR=fovCircleColor.R,
+		fovCircleColorG=fovCircleColor.G,
+		fovCircleColorB=fovCircleColor.B,
+		fovRadius=fovRadius,
+		blurOn=blurOn,
+		fieldOfView=fieldOfView,
+		watermarkEnabled=watermarkEnabled,
+		autoExecuteEnabled=autoExecuteEnabled
+	}
+	if writefile and isfile then
+		writefile(configName..".json",game:GetService("HttpService"):JSONEncode(config))
+	end
+end
+
+local function loadConfig()
+	if not isfile or not isfile(configName..".json") then return end
+	local success,data=pcall(function()
+		return game:GetService("HttpService"):JSONDecode(readfile(configName..".json"))
+	end)
+	if not success or not data then return end
+	
+	aimbotEnabled=data.aimbotEnabled
+	triggerBotEnabled=data.triggerBotEnabled
+	aimbotTarget=data.aimbotTarget or "Head"
+	aimbotFov=data.aimbotFov or 200
+	aimbotSmoothness=data.aimbotSmoothness or 1
+	targetIdx=data.targetIdx or 1
+	if aimbotCB then aimbotCB.Set(aimbotEnabled) end
+	if triggerBotCB then triggerBotCB.Set(triggerBotEnabled) end
+	if aimbotDropdown then aimbotDropdown.Text=aimbotTarget end
+	if aimbotFovSlider then aimbotFovSlider.Set(aimbotFov) end
+	if aimbotSmoothSlider then aimbotSmoothSlider.Set(aimbotSmoothness) end
+	
+	flyEnabled=data.flyEnabled
+	flySpeed=data.flySpeed or 50
+	superJumpEnabled=data.superJumpEnabled
+	noClipEnabled=data.noClipEnabled
+	superSprintEnabled=data.superSprintEnabled
+	superSprintSpeed=data.superSprintSpeed or 30
+	rapidFireEnabled=data.rapidFireEnabled
+	
+	if flyCB then flyCB.Set(flyEnabled) end
+	if flySpeedSlider then flySpeedSlider.Set(flySpeed) end
+	if superJumpCB then superJumpCB.Set(superJumpEnabled) end
+	if noClipCB then noClipCB.Set(noClipEnabled) end
+	if superSprintCB then superSprintCB.Set(superSprintEnabled) end
+	if superSprintSlider then superSprintSlider.Set(superSprintSpeed) end
+	if rapidFireCB then rapidFireCB.Set(rapidFireEnabled) end
+	
+	if superJumpEnabled and Player.Character and Player.Character:FindFirstChild("Humanoid") then
+		Player.Character.Humanoid.JumpPower=200
+	end
+	if superSprintEnabled and Player.Character and Player.Character:FindFirstChild("Humanoid") then
+		Player.Character.Humanoid.WalkSpeed=superSprintSpeed
+	end
+	
+	if flyEnabled then
+		stopFly()
+		wait(0.2)
+		startFly()
+	end
+	
+	if rapidFireEnabled then
+		if rapidFireConn then
+			rapidFireConn:Disconnect()
+			rapidFireConn=nil
+		end
+		rapidFireConn=RunService.RenderStepped:Connect(function()
+			if rapidFireEnabled and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
+				fireTool()
+			end
+		end)
+	end
+	
+	espEnabled=data.espEnabled
+	espColor=Color3.fromRGB(data.espColorR or 0,data.espColorG or 0,data.espColorB or 0)
+	tracersEnabled=data.tracersEnabled
+	tracerColor=Color3.fromRGB(data.tracerColorR or 255,data.tracerColorG or 255,data.tracerColorB or 255)
+	fovCircleEnabled=data.fovCircleEnabled
+	fovCircleColor=Color3.fromRGB(data.fovCircleColorR or 0,data.fovCircleColorG or 0,data.fovCircleColorB or 0)
+	fovRadius=data.fovRadius or 200
+	
+	if espCB then espCB.Set(espEnabled) end
+	if tracersCB then tracersCB.Set(tracersEnabled) end
+	if fovCircleCB then fovCircleCB.Set(fovCircleEnabled) end
+	if fovRadiusSlider then fovRadiusSlider.Set(fovRadius) end
+	
+	if espEnabled then
+		refreshAllESP()
+		if espRefreshConn then espRefreshConn:Disconnect() end
+		espRefreshConn=RunService.Heartbeat:Connect(function()
+			refreshAllESP()
+			wait(1)
+		end)
+	end
+	
+	blurOn=data.blurOn
+	fieldOfView=data.fieldOfView or 70
+	watermarkEnabled=data.watermarkEnabled
+	autoExecuteEnabled=data.autoExecuteEnabled
+	
+	if blurOn then
+		blurToggle.Text="✓"
+		if main.Visible then
+			blur.Enabled=true
+			TweenService:Create(blur,TweenInfo.new(.2),{Size=18}):Play()
+		end
+	end
+	if fovSlider then fovSlider.Set(fieldOfView) end
+	Camera.FieldOfView=fieldOfView
+	if watermarkCB then watermarkCB.Set(watermarkEnabled) end
+	if watermarkGui then watermarkGui.Enabled=watermarkEnabled end
+	if autoExecuteCB then autoExecuteCB.Set(autoExecuteEnabled) end
+end
+
+btn(pages[4],"Save Config",20,215,120,30).MouseButton1Click:Connect(saveConfig)
+btn(pages[4],"Load Config",150,215,120,30).MouseButton1Click:Connect(loadConfig)
+
+local watermarkGui=Instance.new("ScreenGui")
+watermarkGui.Name="ClownWatermark"
+watermarkGui.ResetOnSpawn=false
+watermarkGui.IgnoreGuiInset=true
+watermarkGui.Enabled=false
+watermarkGui.Parent=PlayerGui
+
+local wmFrame=Instance.new("Frame")
+wmFrame.Size=UDim2.new(0,280,0,28)
+wmFrame.Position=UDim2.new(0,10,0,10)
+wmFrame.BackgroundColor3=Color3.fromRGB(0,0,0)
+wmFrame.BackgroundTransparency=0.4
+wmFrame.BorderSizePixel=0
+wmFrame.Parent=watermarkGui
+round(wmFrame,6)
+
+local wmText=Instance.new("TextLabel")
+wmText.Size=UDim2.new(1,-10,1,0)
+wmText.Position=UDim2.new(0,5,0,0)
+wmText.BackgroundTransparency=1
+wmText.Text=watermarkText
+wmText.TextColor3=Color3.fromRGB(255,255,255)
+wmText.TextSize=14
+wmText.Font=Enum.Font.Code
+wmText.TextXAlignment=Enum.TextXAlignment.Left
+wmText.Parent=wmFrame
+
+local wmTime=Instance.new("TextLabel")
+wmTime.Size=UDim2.new(0,80,1,0)
+wmTime.Position=UDim2.new(1,-100,0,0)
+wmTime.BackgroundTransparency=1
+wmTime.TextColor3=Color3.fromRGB(200,200,200)
+wmTime.TextSize=12
+wmTime.Font=Enum.Font.Code
+wmTime.TextXAlignment=Enum.TextXAlignment.Right
+wmTime.Parent=wmFrame
+
+local wmDrag=false
+local wmDragStart=nil
+local wmStartPos=nil
+
+wmFrame.InputBegan:Connect(function(i)
+	if i.UserInputType==Enum.UserInputType.MouseButton1 then
+		wmDrag=true
+		wmDragStart=i.Position
+		wmStartPos=wmFrame.Position
+		i.Changed:Connect(function()
+			if i.UserInputState==Enum.UserInputState.End then
+				wmDrag=false
+			end
+		end)
+	end
+end)
+
+UIS.InputChanged:Connect(function(i)
+	if wmDrag and i.UserInputType==Enum.UserInputType.MouseMovement then
+		local delta=i.Position-wmDragStart
+		wmFrame.Position=UDim2.new(wmStartPos.X.Scale,wmStartPos.X.Offset+delta.X,wmStartPos.Y.Scale,wmStartPos.Y.Offset+delta.Y)
+	end
+end)
+
+RunService.RenderStepped:Connect(function()
+	if watermarkEnabled then
+		local dt=os.date("*t")
+		wmTime.Text=string.format("%02d:%02d:%02d",dt.hour,dt.min,dt.sec)
+	end
+end)
+
+local dragging=false
+local dragStart,startPos,dragInput
+
+top.InputBegan:Connect(function(i)
+	if i.UserInputType==Enum.UserInputType.MouseButton1 then
+		dragging=true
+		dragStart=i.Position
+		startPos=main.Position
+		i.Changed:Connect(function()
+			if i.UserInputState==Enum.UserInputState.End then
+				dragging=false
+			end
+		end)
+	end
+end)
+
+top.InputChanged:Connect(function(i)
+	if i.UserInputType==Enum.UserInputType.MouseMovement then
+		dragInput=i
+	end
+end)
+
+UIS.InputChanged:Connect(function(i)
+	if dragging and i==dragInput then
+		local d=i.Position-dragStart
+		main.Position=UDim2.new(startPos.X.Scale,startPos.X.Offset+d.X,startPos.Y.Scale,startPos.Y.Offset+d.Y)
+	end
+end)
+
+UIS.MouseIconEnabled=false
+UIS.MouseBehavior=Enum.MouseBehavior.Default
+
+local open=true
+
+local function setMenu(v)
+	open=v
+	main.Visible=v
+	cursor.Visible=v
+	if v then
+		UIS.MouseIconEnabled=false
+		UIS.MouseBehavior=Enum.MouseBehavior.Default
+		if blurOn then
+			blur.Enabled=true
+			blur.Size=0
+			TweenService:Create(blur,TweenInfo.new(.2),{Size=18}):Play()
+		end
+	else
+		UIS.MouseIconEnabled=false
+		UIS.MouseBehavior=Enum.MouseBehavior.Default
+		local tw=TweenService:Create(blur,TweenInfo.new(.2),{Size=0})
+		tw:Play()
+		tw.Completed:Connect(function()
+			if not open then
+				blur.Enabled=false
+			end
+		end)
+	end
+end
+
+loginButton.MouseButton1Click:Connect(function()
+	local enteredKey=keyBox.Text
+	if enteredKey==validKey then
+		isLoggedIn=true
+		loginStatus.Text="Welcome "..Player.Name.."!"
+		loginStatus.TextColor3=Color3.fromRGB(0,255,100)
+		saveKeyToFile(enteredKey)
+		task.wait(1)
+		loginFrame.Visible=false
+		setMenu(true)
+	else
+		loginStatus.Text="Invalid Key!"
+		loginStatus.TextColor3=Color3.fromRGB(255,0,0)
+		keyBox.Text=""
+	end
+end)
+
+UIS.InputBegan:Connect(function(i,gp)
+	if gp then return end
+	if i.KeyCode==Enum.KeyCode.RightShift then
+		if isLoggedIn then
+			setMenu(not open)
+		end
+	end
+end)
+
+local savedKey=loadKeyFromFile()
+if savedKey==validKey then
+	isLoggedIn=true
+	loginFrame.Visible=false
+	setMenu(true)
+else
+	isLoggedIn=false
+	loginFrame.Visible=true
+	main.Visible=false
+	cursor.Visible=true
+	blur.Enabled=false
+end
+
+loadConfig()
