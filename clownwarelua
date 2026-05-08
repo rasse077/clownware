@@ -1125,9 +1125,6 @@ UIS.InputChanged:Connect(function(i)
 	end
 end)
 
-UIS.MouseIconEnabled=false
-UIS.MouseBehavior=Enum.MouseBehavior.Default
-
 local open=true
 
 local function setMenu(v)
@@ -1136,15 +1133,15 @@ local function setMenu(v)
 	cursor.Visible=v
 	if v then
 		UIS.MouseIconEnabled=false
-		UIS.MouseBehavior=Enum.MouseBehavior.Default
+		cursor.Visible=true
 		if blurOn then
 			blur.Enabled=true
 			blur.Size=0
 			TweenService:Create(blur,TweenInfo.new(.2),{Size=18}):Play()
 		end
 	else
-		UIS.MouseIconEnabled=false
-		UIS.MouseBehavior=Enum.MouseBehavior.Default
+		UIS.MouseIconEnabled=true
+		cursor.Visible=false
 		local tw=TweenService:Create(blur,TweenInfo.new(.2),{Size=0})
 		tw:Play()
 		tw.Completed:Connect(function()
@@ -1191,6 +1188,7 @@ else
 	loginFrame.Visible=true
 	main.Visible=false
 	cursor.Visible=true
+	UIS.MouseIconEnabled=false
 	blur.Enabled=false
 end
 
