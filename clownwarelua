@@ -209,9 +209,6 @@ cursor.AnchorPoint=Vector2.new(0.5,0.5)
 cursor.ZIndex=9999
 round(cursor,999)
 
-local mousePos=UIS:GetMouseLocation()
-cursor.Position=UDim2.fromOffset(mousePos.X,mousePos.Y)
-
 RunService.RenderStepped:Connect(function()
     local currentPos=UIS:GetMouseLocation()
     cursor.Position=UDim2.fromOffset(currentPos.X,currentPos.Y)
@@ -340,8 +337,9 @@ txt(pages[1],"Aimbot",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code
 local aimbotEnabled=false
 local aimbotTarget="Head"
 local aimbotFov=200
-local aimbotSmoothness=1
+local aimbotSmoothness=0.3
 local triggerBotEnabled=false
+local currentTarget=nil
 
 local aimbotConn=nil
 local triggerBotConn=nil
@@ -376,6 +374,25 @@ local function getClosestPlayerInFov()
 	return closest
 end
 
+local function getMouseDelta(targetPos)
+	local vector, onScreen = Camera:WorldToViewportPoint(targetPos)
+	if not onScreen then return nil end
+	local mousePos = UIS:GetMouseLocation()
+	local delta = Vector2.new(vector.X - mousePos.X, vector.Y - mousePos.Y)
+	return delta
+end
+
+local function moveCameraSmooth(delta)
+	local smoothFactor = aimbotSmoothness
+	local moveX = delta.X * smoothFactor
+	local moveY = delta.Y * smoothFactor
+	local newCFrame = Camera.CFrame * CFrame.Angles(0, 0, 0)
+	local xOffset = -moveX / Camera.ViewportSize.X * Camera.FieldOfView * 0.5
+	local yOffset = -moveY / Camera.ViewportSize.Y * Camera.FieldOfView * 0.5
+	newCFrame = newCFrame * CFrame.Angles(math.rad(yOffset), math.rad(xOffset), 0)
+	Camera.CFrame = newCFrame
+end
+
 local function fireTool()
 	local tool=Player.Character and Player.Character:FindFirstChildOfClass("Tool")
 	if tool and tool:FindFirstChild("Handle") then
@@ -399,8 +416,10 @@ aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
 				if target and target.Character then
 					local aimPart=target.Character:FindFirstChild(aimbotTarget) or target.Character:FindFirstChild("HumanoidRootPart")
 					if aimPart then
-						local targetCF=CFrame.new(Camera.CFrame.Position,aimPart.Position)
-						Camera.CFrame=Camera.CFrame:Lerp(targetCF,math.clamp(aimbotSmoothness/10,0.1,1))
+						local delta=getMouseDelta(aimPart.Position)
+						if delta and delta.Magnitude>5 then
+							moveCameraSmooth(delta)
+						end
 					end
 				end
 			end
@@ -423,13 +442,9 @@ triggerBotCB=checkbox(pages[1],20,90,"Trigger Bot",function(state)
 				if target and target.Character then
 					local aimPart=target.Character:FindFirstChild(aimbotTarget) or target.Character:FindFirstChild("HumanoidRootPart")
 					if aimPart then
-						local screenPos,onScreen=Camera:WorldToViewportPoint(aimPart.Position)
-						if onScreen then
-							local mousePos=UIS:GetMouseLocation()
-							local dist=(Vector2.new(screenPos.X,screenPos.Y)-mousePos).Magnitude
-							if dist<30 then
-								fireTool()
-							end
+						local delta=getMouseDelta(aimPart.Position)
+						if delta and delta.Magnitude<30 then
+							fireTool()
 						end
 					end
 				end
@@ -458,7 +473,7 @@ aimbotFovSlider=slider(pages[1],20,215,200,30,500,200,function(v)
 end)
 
 txt(pages[1],"Smoothness",14,20,260,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-aimbotSmoothSlider=slider(pages[1],20,280,200,0.1,10,1,function(v)
+aimbotSmoothSlider=slider(pages[1],20,280,200,0.05,0.5,0.3,function(v)
 	aimbotSmoothness=v
 end)
 
@@ -1005,7 +1020,7 @@ local function loadConfig()
 	triggerBotEnabled=data.triggerBotEnabled
 	aimbotTarget=data.aimbotTarget or "Head"
 	aimbotFov=data.aimbotFov or 200
-	aimbotSmoothness=data.aimbotSmoothness or 1
+	aimbotSmoothness=data.aimbotSmoothness or 0.3
 	targetIdx=data.targetIdx or 1
 	if aimbotCB then aimbotCB.Set(aimbotEnabled) end
 	if triggerBotCB then triggerBotCB.Set(triggerBotEnabled) end
