@@ -204,14 +204,15 @@ local function slider(p,x,y,w,min,max,default,callback)
 	}
 end
 
-local cursor=frame(gui,0,0,8,8,Color3.fromRGB(255,255,255))
-cursor.AnchorPoint=Vector2.new(0.5,0.5)
-cursor.ZIndex=9999
-round(cursor,999)
+local customCursor=frame(gui,0,0,8,8,Color3.fromRGB(255,255,255))
+customCursor.AnchorPoint=Vector2.new(0.5,0.5)
+customCursor.ZIndex=9999
+round(customCursor,999)
+customCursor.Visible=false
 
 RunService.RenderStepped:Connect(function()
-    local currentPos=UIS:GetMouseLocation()
-    cursor.Position=UDim2.fromOffset(currentPos.X,currentPos.Y)
+	local currentPos=UIS:GetMouseLocation()
+	customCursor.Position=UDim2.fromOffset(currentPos.X,currentPos.Y)
 end)
 
 local main=frame(gui,0,0,770,520,Color3.fromRGB(7,7,7))
@@ -327,7 +328,7 @@ for i,v in ipairs(tabButtons) do
 	end)
 end
 
-txt(pages[1],"Aimbot",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
+txt(pages[1],"Aimbot",20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local aimbotEnabled=false
 local aimbotTarget="Head"
@@ -452,7 +453,7 @@ aimbotSmoothSlider=slider(pages[1],20,280,200,0.05,0.5,0.15,function(v)
 	aimbotSmoothness=v
 end)
 
-txt(pages[2],"Movement",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
+txt(pages[2],"Movement",20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local flyEnabled=false
 local flySpeed=50
@@ -645,7 +646,7 @@ Player.CharacterAdded:Connect(function(char)
 	end
 end)
 
-txt(pages[3],"Visuals",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
+txt(pages[3],"Visuals",20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local espEnabled=false
 local espColor=Color3.fromRGB(0,0,0)
@@ -833,7 +834,7 @@ RunService.RenderStepped:Connect(function()
 	updateTracers()
 end)
 
-txt(pages[4],"Settings",18,20,16,160,18,Color3.fromRGB(255,255,255),Enum.Font.Code)
+txt(pages[4],"Settings",18,16,160,18,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local blurOn=false
 local blurToggle=btn(pages[4],"",20,42,18,18)
@@ -1203,19 +1204,19 @@ local open=true
 local function setMenu(v)
 	open=v
 	main.Visible=v
-	cursor.Visible=v
-	UIS.MouseBehavior=Enum.MouseBehavior.Default
+	customCursor.Visible=v
 	if v then
 		UIS.MouseIconEnabled=false
-		cursor.Visible=true
+	else
+		UIS.MouseIconEnabled=true
+	end
+	if v then
 		if blurOn then
 			blur.Enabled=true
 			blur.Size=0
 			TweenService:Create(blur,TweenInfo.new(.2),{Size=18}):Play()
 		end
 	else
-		UIS.MouseIconEnabled=true
-		cursor.Visible=false
 		local tw=TweenService:Create(blur,TweenInfo.new(.2),{Size=0})
 		tw:Play()
 		tw.Completed:Connect(function()
@@ -1261,7 +1262,7 @@ else
 	isLoggedIn=false
 	loginFrame.Visible=true
 	main.Visible=false
-	cursor.Visible=true
+	customCursor.Visible=true
 	UIS.MouseIconEnabled=false
 	UIS.MouseBehavior=Enum.MouseBehavior.Default
 	blur.Enabled=false
