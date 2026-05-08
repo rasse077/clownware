@@ -207,12 +207,39 @@ end
 local customCursor=frame(gui,0,0,8,8,Color3.fromRGB(255,255,255))
 customCursor.AnchorPoint=Vector2.new(0.5,0.5)
 customCursor.ZIndex=9999
-round(customCursor,999)
+customCursor.BackgroundTransparency=1
 customCursor.Visible=true
+round(customCursor,999)
+
+local cursorTrail={}
+for i=1,5 do
+	local trail=frame(gui,0,0,4,4,Color3.fromRGB(255,255,255))
+	trail.AnchorPoint=Vector2.new(0.5,0.5)
+	trail.ZIndex=9998
+	trail.BackgroundTransparency=0.5
+	round(trail,999)
+	trail.Visible=true
+	table.insert(cursorTrail,{frame=trail,pos=Vector2.new(0,0),delay=i*0.03})
+end
+
+local trailPositions={}
+for i=1,10 do
+	trailPositions[i]=Vector2.new(0,0)
+end
 
 RunService.RenderStepped:Connect(function()
 	local currentPos=UIS:GetMouseLocation()
 	customCursor.Position=UDim2.fromOffset(currentPos.X,currentPos.Y)
+	for i=#trailPositions,2,-1 do
+		trailPositions[i]=trailPositions[i-1]
+	end
+	trailPositions[1]=currentPos
+	for i,trail in ipairs(cursorTrail) do
+		local idx=math.min(i*2,#trailPositions)
+		if trailPositions[idx] then
+			trail.frame.Position=UDim2.fromOffset(trailPositions[idx].X,trailPositions[idx].Y)
+		end
+	end
 end)
 
 local main=frame(gui,0,0,770,520,Color3.fromRGB(7,7,7))
@@ -220,6 +247,7 @@ main.AnchorPoint=Vector2.new(0.5,0.5)
 main.Position=UDim2.new(0.5,0,0.5,0)
 round(main,6)
 stroke(main,1,Color3.fromRGB(40,40,40),0)
+main.Visible=false
 
 local loginFrame=frame(gui,0,0,770,520,Color3.fromRGB(7,7,7))
 loginFrame.AnchorPoint=Vector2.new(0.5,0.5)
@@ -1204,19 +1232,23 @@ local open=true
 local function setMenu(v)
 	open=v
 	main.Visible=v
-	customCursor.Visible=v
 	if v then
 		UIS.MouseIconEnabled=false
-	else
-		UIS.MouseIconEnabled=true
-	end
-	if v then
+		customCursor.Visible=true
+		for _,trail in ipairs(cursorTrail) do
+			trail.frame.Visible=true
+		end
 		if blurOn then
 			blur.Enabled=true
 			blur.Size=0
 			TweenService:Create(blur,TweenInfo.new(.2),{Size=18}):Play()
 		end
 	else
+		UIS.MouseIconEnabled=true
+		customCursor.Visible=false
+		for _,trail in ipairs(cursorTrail) do
+			trail.frame.Visible=false
+		end
 		local tw=TweenService:Create(blur,TweenInfo.new(.2),{Size=0})
 		tw:Play()
 		tw.Completed:Connect(function()
@@ -1263,6 +1295,9 @@ else
 	loginFrame.Visible=true
 	main.Visible=false
 	customCursor.Visible=true
+	for _,trail in ipairs(cursorTrail) do
+		trail.frame.Visible=true
+	end
 	UIS.MouseIconEnabled=false
 	UIS.MouseBehavior=Enum.MouseBehavior.Default
 	blur.Enabled=false
