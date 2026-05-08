@@ -211,13 +211,17 @@ cursor.AnchorPoint=Vector2.new(0.5,0.5)
 cursor.ZIndex=9999
 round(cursor,999)
 
-local mousePos=UIS:GetMouseLocation()
-cursor.Position=UDim2.fromOffset(mousePos.X,mousePos.Y)
+local mousePos = UIS:GetMouseLocation()
+cursor.Position = UDim2.fromOffset(mousePos.X, mousePos.Y)
 
 RunService.RenderStepped:Connect(function()
-	local pos=UIS:GetMouseLocation()
-	mousePos=mousePos:Lerp(pos,0.35)
-	cursor.Position=UDim2.fromOffset(mousePos.X,pos.Y)
+    local currentPos = UIS:GetMouseLocation()
+    cursor.Position = UDim2.fromOffset(currentPos.X, currentPos.Y)
+end)
+
+Camera:GetPropertyChangedSignal("ViewportSize"):Connect(function()
+    local currentPos = UIS:GetMouseLocation()
+    cursor.Position = UDim2.fromOffset(currentPos.X, currentPos.Y)
 end)
 
 local main=frame(gui,0,0,770,520,Color3.fromRGB(7,7,7))
