@@ -903,25 +903,15 @@ local function createWatermark()
 	round(wmFrame,6)
 
 	local wmText=Instance.new("TextLabel")
-	wmText.Size=UDim2.new(1,-10,1,0)
-	wmText.Position=UDim2.new(0,5,0,0)
+	wmText.Size=UDim2.new(1,0,1,0)
+	wmText.Position=UDim2.new(0,0,0,0)
 	wmText.BackgroundTransparency=1
 	wmText.Text=watermarkText
 	wmText.TextColor3=Color3.fromRGB(255,255,255)
 	wmText.TextSize=14
 	wmText.Font=Enum.Font.Code
-	wmText.TextXAlignment=Enum.TextXAlignment.Left
+	wmText.TextXAlignment=Enum.TextXAlignment.Center
 	wmText.Parent=wmFrame
-
-	local wmTime=Instance.new("TextLabel")
-	wmTime.Size=UDim2.new(0,80,1,0)
-	wmTime.Position=UDim2.new(1,-100,0,0)
-	wmTime.BackgroundTransparency=1
-	wmTime.TextColor3=Color3.fromRGB(200,200,200)
-	wmTime.TextSize=12
-	wmTime.Font=Enum.Font.Code
-	wmTime.TextXAlignment=Enum.TextXAlignment.Right
-	wmTime.Parent=wmFrame
 
 	local wmDrag=false
 	local wmDragStart=nil
@@ -944,13 +934,6 @@ local function createWatermark()
 		if wmDrag and i.UserInputType==Enum.UserInputType.MouseMovement then
 			local delta=i.Position-wmDragStart
 			wmFrame.Position=UDim2.new(wmStartPos.X.Scale,wmStartPos.X.Offset+delta.X,wmStartPos.Y.Scale,wmStartPos.Y.Offset+delta.Y)
-		end
-	end)
-
-	RunService.RenderStepped:Connect(function()
-		if watermarkEnabled and watermarkGui and watermarkGui.Enabled then
-			local dt=os.date("*t")
-			wmTime.Text=string.format("%02d:%02d:%02d",dt.hour,dt.min,dt.sec)
 		end
 	end)
 end
@@ -1150,9 +1133,9 @@ local function setMenu(v)
 	open=v
 	main.Visible=v
 	cursor.Visible=v
+	UIS.MouseBehavior=Enum.MouseBehavior.Default
 	if v then
 		UIS.MouseIconEnabled=false
-		UIS.MouseBehavior=Enum.MouseBehavior.Default
 		cursor.Visible=true
 		if blurOn then
 			blur.Enabled=true
@@ -1161,7 +1144,6 @@ local function setMenu(v)
 		end
 	else
 		UIS.MouseIconEnabled=true
-		UIS.MouseBehavior=Enum.MouseBehavior.Default
 		cursor.Visible=false
 		local tw=TweenService:Create(blur,TweenInfo.new(.2),{Size=0})
 		tw:Play()
@@ -1210,6 +1192,7 @@ else
 	main.Visible=false
 	cursor.Visible=true
 	UIS.MouseIconEnabled=false
+	UIS.MouseBehavior=Enum.MouseBehavior.Default
 	blur.Enabled=false
 end
 
