@@ -103,6 +103,24 @@ local function textbox(p,ph,x,y,w,h)
 	return tb
 end
 
+local function copyToClipboard(text)
+	local success=false
+	if setclipboard then
+		setclipboard(text)
+		success=true
+	elseif toclipboard then
+		toclipboard(text)
+		success=true
+	elseif syn and syn.clipboard then
+		syn.clipboard(text)
+		success=true
+	elseif Clipboard then
+		Clipboard(text)
+		success=true
+	end
+	return success
+end
+
 local function checkbox(p,x,y,text,callback)
 	local box=frame(p,x,y,18,18,Color3.fromRGB(16,16,16))
 	round(box,4)
@@ -186,46 +204,14 @@ local function slider(p,x,y,w,min,max,default,callback)
 	}
 end
 
-local customCursor=frame(gui,0,0,8,8,Color3.fromRGB(255,255,255))
-customCursor.AnchorPoint=Vector2.new(0.5,0.5)
-customCursor.ZIndex=9999
-customCursor.BackgroundTransparency=1
-customCursor.Visible=true
-customCursor.Active=false
-customCursor.Selectable=false
-round(customCursor,999)
-
-local cursorTrail={}
-for i=1,5 do
-	local trail=frame(gui,0,0,4,4,Color3.fromRGB(255,255,255))
-	trail.AnchorPoint=Vector2.new(0.5,0.5)
-	trail.ZIndex=9998
-	trail.BackgroundTransparency=0.5
-	trail.Active=false
-	trail.Selectable=false
-	round(trail,999)
-	trail.Visible=true
-	table.insert(cursorTrail,{frame=trail,pos=Vector2.new(0,0),delay=i*0.03})
-end
-
-local trailPositions={}
-for i=1,10 do
-	trailPositions[i]=Vector2.new(0,0)
-end
+local cursor=frame(gui,0,0,8,8,Color3.fromRGB(255,255,255))
+cursor.AnchorPoint=Vector2.new(0.5,0.5)
+cursor.ZIndex=9999
+round(cursor,999)
 
 RunService.RenderStepped:Connect(function()
-	local currentPos=UIS:GetMouseLocation()
-	customCursor.Position=UDim2.fromOffset(currentPos.X,currentPos.Y)
-	for i=#trailPositions,2,-1 do
-		trailPositions[i]=trailPositions[i-1]
-	end
-	trailPositions[1]=currentPos
-	for i,trail in ipairs(cursorTrail) do
-		local idx=math.min(i*2,#trailPositions)
-		if trailPositions[idx] then
-			trail.frame.Position=UDim2.fromOffset(trailPositions[idx].X,trailPositions[idx].Y)
-		end
-	end
+    local currentPos=UIS:GetMouseLocation()
+    cursor.Position=UDim2.fromOffset(currentPos.X,currentPos.Y)
 end)
 
 local main=frame(gui,0,0,770,520,Color3.fromRGB(7,7,7))
@@ -233,7 +219,64 @@ main.AnchorPoint=Vector2.new(0.5,0.5)
 main.Position=UDim2.new(0.5,0,0.5,0)
 round(main,6)
 stroke(main,1,Color3.fromRGB(40,40,40),0)
-main.Visible=true
+
+local loginFrame=frame(gui,0,0,770,520,Color3.fromRGB(7,7,7))
+loginFrame.AnchorPoint=Vector2.new(0.5,0.5)
+loginFrame.Position=UDim2.new(0.5,0,0.5,0)
+round(loginFrame,6)
+stroke(loginFrame,1,Color3.fromRGB(40,40,40),0)
+
+local loginTop=frame(loginFrame,0,0,770,50,Color3.fromRGB(6,6,6))
+round(loginTop,6)
+txt(loginTop,"Clownware Login",28,22,6,350,24,Color3.fromRGB(255,255,255),Enum.Font.Code)
+
+local loginCard=frame(loginFrame,0,0,400,250,Color3.fromRGB(10,10,10))
+loginCard.AnchorPoint=Vector2.new(0.5,0.5)
+loginCard.Position=UDim2.new(0.5,0,0.5,-20)
+round(loginCard,6)
+stroke(loginCard,1,Color3.fromRGB(45,45,45),0)
+
+txt(loginCard,"Enter License Key",20,100,20,200,22,Color3.fromRGB(255,255,255),Enum.Font.Code,Enum.TextXAlignment.Center)
+
+local keyBox=textbox(loginCard,"Paste your key here",80,60,240,35)
+
+local loginStatus=txt(loginCard,"",14,100,105,200,18,Color3.fromRGB(255,255,255),Enum.Font.Code,Enum.TextXAlignment.Center)
+
+local loginButton=btn(loginCard,"Login",110,140,180,40)
+loginButton.TextSize=16
+
+local copyButton=btn(loginCard,"Get Key (Copy Link)",110,195,180,35)
+copyButton.TextSize=13
+
+local validKey="SYN-sfghdghdfgu3-3j14h-f3h39"
+local isLoggedIn=false
+local keyConfigFile="clownkey.json"
+
+local function saveKeyToFile(key)
+	if writefile and isfile then
+		local data={key=key}
+		writefile(keyConfigFile,game:GetService("HttpService"):JSONEncode(data))
+	end
+end
+
+local function loadKeyFromFile()
+	if not isfile or not isfile(keyConfigFile) then return nil end
+	local success,data=pcall(function()
+		return game:GetService("HttpService"):JSONDecode(readfile(keyConfigFile))
+	end)
+	if success and data and data.key then
+		return data.key
+	end
+	return nil
+end
+
+copyButton.MouseButton1Click:Connect(function()
+	copyToClipboard("https://direct-link.net/5635067/dQLXy1KlsNDf")
+	loginStatus.Text="Link copied!"
+	loginStatus.TextColor3=Color3.fromRGB(0,255,100)
+	task.wait(2)
+	loginStatus.Text=""
+end)
 
 local top=frame(main,0,0,770,50,Color3.fromRGB(6,6,6))
 round(top,6)
@@ -241,10 +284,10 @@ round(top,6)
 txt(top,"Clownware",28,22,6,260,24,Color3.fromRGB(255,255,255),Enum.Font.Code)
 txt(top,"https://discord.gg/mWf7HCprMP",14,24,28,250,16,Color3.fromRGB(130,130,130),Enum.Font.Code)
 
-local left=frame(main,0,50,220,470,Color3.fromRGB(5,5,5))
-frame(main,220,50,1,470,Color3.fromRGB(28,28,28))
+local left=frame(main,0,50,220,430,Color3.fromRGB(5,5,5))
+frame(main,220,50,1,430,Color3.fromRGB(28,28,28))
 local bottom=frame(main,0,480,770,40,Color3.fromRGB(10,10,10))
-txt(bottom,"Version: 2.0.0",14,20,10,320,20,Color3.fromRGB(120,120,120),Enum.Font.Code)
+txt(bottom,"Version: 1.2.3",14,20,10,320,20,Color3.fromRGB(120,120,120),Enum.Font.Code)
 
 local content=frame(main,221,50,549,430,Color3.fromRGB(6,6,6))
 
@@ -252,8 +295,7 @@ local tabs={
 	{"Aimbot",20},
 	{"Movement",62},
 	{"Visuals",104},
-	{"Weapons",146},
-	{"Settings",188}
+	{"Settings",146}
 }
 
 local pages={}
@@ -285,49 +327,23 @@ for i,v in ipairs(tabButtons) do
 	end)
 end
 
-txt(pages[1],"Aimbot",20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
+txt(pages[1],"Aimbot",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local aimbotEnabled=false
 local aimbotTarget="Head"
 local aimbotFov=200
 local aimbotSmoothness=0.15
 local triggerBotEnabled=false
-local silentAimEnabled=false
-local visibleCheckEnabled=false
-local predictionEnabled=false
 
 local aimbotConn=nil
 local triggerBotConn=nil
-local silentAimConn=nil
 local aimbotCB=nil
 local aimbotDropdown=nil
 local aimbotFovSlider=nil
 local aimbotSmoothSlider=nil
 local triggerBotCB=nil
-local silentAimCB=nil
-local visibleCheckCB=nil
-local predictionCB=nil
 local targetIdx=1
 local targetParts={"Head","Torso","HumanoidRootPart","LeftHand","RightHand","LeftFoot","RightFoot"}
-
-local function isVisible(part)
-	if not visibleCheckEnabled then return true end
-	local origin=Camera.CFrame.Position
-	local ray=Ray.new(origin, (part.Position-origin).Unit * (part.Position-origin).Magnitude)
-	local hit,pos=Workspace:FindPartOnRay(ray, Player.Character)
-	return hit==part.Parent or hit==part
-end
-
-local function getPredictedPosition(part)
-	if not predictionEnabled then return part.Position end
-	local velocity=Vector3.zero
-	if part.Parent:FindFirstChild("Humanoid") then
-		velocity=part.Parent.HumanoidRootPart.Velocity
-	end
-	local distance=(Camera.CFrame.Position-part.Position).Magnitude
-	local travelTime=distance/3000
-	return part.Position+velocity*travelTime
-end
 
 local function getClosestPlayerInFov()
 	local closest=nil
@@ -337,8 +353,8 @@ local function getClosestPlayerInFov()
 	for _,plr in ipairs(Players:GetPlayers()) do
 		if plr~=Player and plr.Character and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health>0 then
 			local part=plr.Character:FindFirstChild(aimbotTarget) or plr.Character:FindFirstChild("HumanoidRootPart")
-			if part and isVisible(part) then
-				local pos=getPredictedPosition(part)
+			if part then
+				local pos=part.Position
 				local dir=(pos-camPos).Unit
 				local angle=math.acos(math.clamp(camLook:Dot(dir),-1,1))
 				local dist=math.deg(angle)
@@ -357,7 +373,7 @@ local function fireTool()
 	if tool and tool:FindFirstChild("Handle") then
 		if tool.Enabled then
 			tool:Activate()
-			task.wait()
+			task.wait(0.05)
 			if tool.Parent then
 				tool:Deactivate()
 			end
@@ -367,8 +383,8 @@ end
 
 aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
 	aimbotEnabled=state
-	if aimbotConn then aimbotConn:Disconnect() end
 	if aimbotEnabled then
+		if aimbotConn then aimbotConn:Disconnect() end
 		aimbotConn=RunService.RenderStepped:Connect(function()
 			if aimbotEnabled then
 				local target=getClosestPlayerInFov()
@@ -382,69 +398,43 @@ aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
 				end
 			end
 		end)
+	else
+		if aimbotConn then
+			aimbotConn:Disconnect()
+			aimbotConn=nil
+		end
 	end
 end)
 
 triggerBotCB=checkbox(pages[1],20,90,"Trigger Bot",function(state)
 	triggerBotEnabled=state
-	if triggerBotConn then triggerBotConn:Disconnect() end
 	if triggerBotEnabled then
+		if triggerBotConn then triggerBotConn:Disconnect() end
 		triggerBotConn=RunService.RenderStepped:Connect(function()
 			if triggerBotEnabled then
 				local target=getClosestPlayerInFov()
 				if target and target.Character then
 					local aimPart=target.Character:FindFirstChild(aimbotTarget) or target.Character:FindFirstChild("HumanoidRootPart")
 					if aimPart then
-						local point,onScreen=Camera:WorldToViewportPoint(aimPart.Position)
-						if onScreen then
+						local targetCF=CFrame.new(Camera.CFrame.Position,aimPart.Position)
+						local distance=(targetCF.Position-Camera.CFrame.Position).Magnitude
+						if distance<50 then
 							fireTool()
 						end
 					end
 				end
 			end
 		end)
+	else
+		if triggerBotConn then
+			triggerBotConn:Disconnect()
+			triggerBotConn=nil
+		end
 	end
 end)
 
-silentAimCB=checkbox(pages[1],20,120,"Silent Aim",function(state)
-	silentAimEnabled=state
-	if silentAimConn then silentAimConn:Disconnect() end
-	if silentAimEnabled then
-		local oldMousePos=nil
-		silentAimConn=RunService.RenderStepped:Connect(function()
-			if silentAimEnabled and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-				local target=getClosestPlayerInFov()
-				if target and target.Character then
-					local aimPart=target.Character:FindFirstChild(aimbotTarget) or target.Character:FindFirstChild("HumanoidRootPart")
-					if aimPart then
-						local screenPos,onScreen=Camera:WorldToViewportPoint(aimPart.Position)
-						if onScreen then
-							if not oldMousePos then
-								oldMousePos=UIS:GetMouseLocation()
-							end
-							mouse1press(screenPos.X,screenPos.Y)
-							task.wait()
-							mouse1click(screenPos.X,screenPos.Y)
-							task.wait()
-							mouse1release(screenPos.X,screenPos.Y)
-						end
-					end
-				end
-			end
-		end)
-	end
-end)
-
-visibleCheckCB=checkbox(pages[1],20,150,"Visibility Check",function(state)
-	visibleCheckEnabled=state
-end)
-
-predictionCB=checkbox(pages[1],20,180,"Prediction",function(state)
-	predictionEnabled=state
-end)
-
-txt(pages[1],"Target",14,20,215,80,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-aimbotDropdown=btn(pages[1],targetParts[targetIdx],20,235,200,30)
+txt(pages[1],"Target",14,20,130,80,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+aimbotDropdown=btn(pages[1],targetParts[targetIdx],20,150,200,30)
 aimbotDropdown.MouseButton1Click:Connect(function()
 	targetIdx=targetIdx+1
 	if targetIdx>#targetParts then targetIdx=1 end
@@ -452,17 +442,17 @@ aimbotDropdown.MouseButton1Click:Connect(function()
 	aimbotTarget=targetParts[targetIdx]
 end)
 
-txt(pages[1],"Aimbot FOV",14,20,280,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-aimbotFovSlider=slider(pages[1],20,300,200,30,500,200,function(v)
+txt(pages[1],"Aimbot FOV",14,20,195,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+aimbotFovSlider=slider(pages[1],20,215,200,30,500,200,function(v)
 	aimbotFov=v
 end)
 
-txt(pages[1],"Smoothness",14,20,345,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-aimbotSmoothSlider=slider(pages[1],20,365,200,0.05,0.5,0.15,function(v)
+txt(pages[1],"Smoothness",14,20,260,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+aimbotSmoothSlider=slider(pages[1],20,280,200,0.05,0.5,0.15,function(v)
 	aimbotSmoothness=v
 end)
 
-txt(pages[2],"Movement",20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
+txt(pages[2],"Movement",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local flyEnabled=false
 local flySpeed=50
@@ -643,7 +633,10 @@ Player.CharacterAdded:Connect(function(char)
 		startFly()
 	end
 	if rapidFireEnabled then
-		if rapidFireConn then rapidFireConn:Disconnect() end
+		if rapidFireConn then
+			rapidFireConn:Disconnect()
+			rapidFireConn=nil
+		end
 		rapidFireConn=RunService.RenderStepped:Connect(function()
 			if rapidFireEnabled and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
 				fireTool()
@@ -652,7 +645,7 @@ Player.CharacterAdded:Connect(function(char)
 	end
 end)
 
-txt(pages[3],"Visuals",20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
+txt(pages[3],"Visuals",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local espEnabled=false
 local espColor=Color3.fromRGB(0,0,0)
@@ -661,18 +654,12 @@ local fovCircleEnabled=false
 local fovCircleColor=Color3.fromRGB(0,0,0)
 local tracerColor=Color3.fromRGB(255,255,255)
 local fovRadius=200
-local boxEspEnabled=false
-local healthBarEnabled=false
-local nameTagsEnabled=false
 
 local espCB=nil
 local tracersCB=nil
 local fovCircleCB=nil
 local fovRadiusSlider=nil
 local espRefreshConn=nil
-local boxEspCB=nil
-local healthBarCB=nil
-local nameTagsCB=nil
 
 local fovCircle=Drawing.new("Circle")
 fovCircle.Visible=false
@@ -683,76 +670,6 @@ fovCircle.Radius=fovRadius
 fovCircle.Position=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
 
 local tracers={}
-local boxes={}
-local healthBars={}
-local nameTags={}
-
-local function updateESPVisuals()
-	for _,plr in ipairs(Players:GetPlayers()) do
-		if plr~=Player and plr.Character and plr.Character:FindFirstChild("HumanoidRootPart") and plr.Character:FindFirstChild("Humanoid") and plr.Character.Humanoid.Health>0 then
-			local root=plr.Character.HumanoidRootPart
-			local head=plr.Character:FindFirstChild("Head") or root
-			local screenPos,onScreen=Camera:WorldToViewportPoint(root.Position)
-			local headPos,headOn=Camera:WorldToViewportPoint(head.Position)
-			
-			if onScreen and boxEspEnabled then
-				local height=math.abs(headPos.Y-screenPos.Y)
-				local width=height*0.6
-				local boxObj=boxes[plr]
-				if not boxObj then
-					boxObj=Drawing.new("Square")
-					boxObj.Thickness=1
-					boxObj.Transparency=0.5
-					boxes[plr]=boxObj
-				end
-				boxObj.Visible=true
-				boxObj.Color=espColor
-				boxObj.Size=Vector2.new(width,height)
-				boxObj.Position=Vector2.new(screenPos.X-width/2,screenPos.Y-height)
-			elseif boxes[plr] then
-				boxes[plr].Visible=false
-			end
-			
-			if onScreen and healthBarEnabled then
-				local health=plr.Character.Humanoid.Health/plr.Character.Humanoid.MaxHealth
-				local height=math.abs(headPos.Y-screenPos.Y)
-				local width=height*0.6
-				local bar=healthBars[plr]
-				if not bar then
-					bar=Drawing.new("Square")
-					bar.Thickness=1
-					bar.Filled=true
-					bar.Transparency=0.3
-					healthBars[plr]=bar
-				end
-				bar.Visible=true
-				bar.Color=Color3.fromRGB(0,255,0)
-				bar.Size=Vector2.new(3,height*health)
-				bar.Position=Vector2.new(screenPos.X-width/2-5,screenPos.Y-height+(height*(1-health)))
-			elseif healthBars[plr] then
-				healthBars[plr].Visible=false
-			end
-			
-			if onScreen and nameTagsEnabled then
-				local nameTag=nameTags[plr]
-				if not nameTag then
-					nameTag=Drawing.new("Text")
-					nameTag.Size=14
-					nameTag.Center=true
-					nameTag.Outline=true
-					nameTag.OutlineColor=Color3.fromRGB(0,0,0)
-					nameTags[plr]=nameTag
-				end
-				nameTag.Visible=true
-				nameTag.Color=espColor
-				nameTag.Text=plr.Name
-				nameTag.Position=Vector2.new(screenPos.X,screenPos.Y-50)
-			elseif nameTags[plr] then
-				nameTags[plr].Visible=false
-			end
-		end
-	end
-end
 
 local function addHighlight(character)
 	if not character then return end
@@ -845,22 +762,10 @@ espCB=checkbox(pages[3],20,60,"Player ESP",function(state)
 	end
 end)
 
-boxEspCB=checkbox(pages[3],20,95,"Box ESP",function(state)
-	boxEspEnabled=state
-end)
-
-healthBarCB=checkbox(pages[3],20,130,"Health Bar",function(state)
-	healthBarEnabled=state
-end)
-
-nameTagsCB=checkbox(pages[3],20,165,"Name Tags",function(state)
-	nameTagsEnabled=state
-end)
-
-txt(pages[3],"ESP Color",14,20,200,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+txt(pages[3],"ESP Color",14,20,95,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
 local espColors={Color3.fromRGB(0,0,0),Color3.fromRGB(255,255,255),Color3.fromRGB(255,0,0),Color3.fromRGB(0,255,0),Color3.fromRGB(0,0,255),Color3.fromRGB(255,255,0),Color3.fromRGB(255,0,255),Color3.fromRGB(0,255,255)}
 for i,col in ipairs(espColors) do
-	local cbtn=frame(pages[3],20+(i-1)*30,220,22,22,col)
+	local cbtn=frame(pages[3],20+(i-1)*30,115,22,22,col)
 	round(cbtn,3)
 	cbtn.InputBegan:Connect(function(input)
 		if input.UserInputType==Enum.UserInputType.MouseButton1 then
@@ -870,7 +775,7 @@ for i,col in ipairs(espColors) do
 	end)
 end
 
-tracersCB=checkbox(pages[3],20,260,"Tracers",function(state)
+tracersCB=checkbox(pages[3],20,150,"Tracers",function(state)
 	tracersEnabled=state
 	if not tracersEnabled then
 		for plr,drawing in pairs(tracers) do
@@ -882,10 +787,10 @@ tracersCB=checkbox(pages[3],20,260,"Tracers",function(state)
 	end
 end)
 
-txt(pages[3],"Tracer Color",14,20,295,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+txt(pages[3],"Tracer Color",14,20,185,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
 local tracerColors={Color3.fromRGB(255,255,255),Color3.fromRGB(0,0,0),Color3.fromRGB(255,0,0),Color3.fromRGB(0,255,0),Color3.fromRGB(0,0,255),Color3.fromRGB(255,255,0),Color3.fromRGB(255,0,255),Color3.fromRGB(0,255,255)}
 for i,col in ipairs(tracerColors) do
-	local cbtn=frame(pages[3],20+(i-1)*30,315,22,22,col)
+	local cbtn=frame(pages[3],20+(i-1)*30,205,22,22,col)
 	round(cbtn,3)
 	cbtn.InputBegan:Connect(function(input)
 		if input.UserInputType==Enum.UserInputType.MouseButton1 then
@@ -894,20 +799,20 @@ for i,col in ipairs(tracerColors) do
 	end)
 end
 
-fovCircleCB=checkbox(pages[3],20,355,"FOV Circle",function(state)
+fovCircleCB=checkbox(pages[3],20,240,"FOV Circle",function(state)
 	fovCircleEnabled=state
 	fovCircle.Visible=state
 end)
 
-txt(pages[3],"FOV Radius",14,20,390,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-fovRadiusSlider=slider(pages[3],20,410,200,30,500,200,function(v)
+txt(pages[3],"FOV Radius",14,20,270,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+fovRadiusSlider=slider(pages[3],20,290,200,30,500,200,function(v)
 	fovRadius=v
 end)
 
-txt(pages[3],"FOV Color",14,20,445,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+txt(pages[3],"FOV Color",14,20,325,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
 local fovColors={Color3.fromRGB(0,0,0),Color3.fromRGB(255,255,255),Color3.fromRGB(255,0,0),Color3.fromRGB(0,255,0),Color3.fromRGB(0,0,255),Color3.fromRGB(255,255,0),Color3.fromRGB(255,0,255),Color3.fromRGB(0,255,255)}
 for i,col in ipairs(fovColors) do
-	local cbtn=frame(pages[3],20+(i-1)*30,465,22,22,col)
+	local cbtn=frame(pages[3],20+(i-1)*30,345,22,22,col)
 	round(cbtn,3)
 	cbtn.InputBegan:Connect(function(input)
 		if input.UserInputType==Enum.UserInputType.MouseButton1 then
@@ -916,175 +821,24 @@ for i,col in ipairs(fovColors) do
 	end)
 end
 
-txt(pages[4],"Weapons",20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
-
-local weaponRapidFireEnabled=false
-local noFireCooldownEnabled=false
-local infiniteAmmoEnabled=false
-local noRecoilEnabled=false
-local noSpreadEnabled=false
-local instantReloadEnabled=false
-
-local weaponRapidFireCB=nil
-local noFireCooldownCB=nil
-local infiniteAmmoCBNil=nil
-local noRecoilCB=nil
-local noSpreadCB=nil
-local instantReloadCB=nil
-
-local fireCooldownOverrides={}
-local recoilOverrides={}
-local spreadOverrides={}
-local reloadOverrides={}
-
-weaponRapidFireCB=checkbox(pages[4],20,60,"Weapon Rapid Fire",function(state)
-	weaponRapidFireEnabled=state
-	if weaponRapidFireEnabled then
-		if rapidFireConn then rapidFireConn:Disconnect() end
-		rapidFireConn=RunService.RenderStepped:Connect(function()
-			if weaponRapidFireEnabled and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-				fireTool()
-			end
-		end)
-	else
-		if rapidFireConn then
-			rapidFireConn:Disconnect()
-			rapidFireConn=nil
-		end
-	end
-end)
-
-noFireCooldownCB=checkbox(pages[4],20,95,"No Fire Cooldown",function(state)
-	noFireCooldownEnabled=state
-	local tool=Player.Character and Player.Character:FindFirstChildOfClass("Tool")
-	if tool and tool.Enabled then
-		if noFireCooldownEnabled then
-			local originalFireRate=tool:GetAttribute("fireRate") or 0.1
-			fireCooldownOverrides[tool]=originalFireRate
-			tool:SetAttribute("fireRate",0)
-		else
-			if fireCooldownOverrides[tool] then
-				tool:SetAttribute("fireRate",fireCooldownOverrides[tool])
-			end
-		end
-	end
-end)
-
-infiniteAmmoCB=checkbox(pages[4],20,130,"Infinite Ammo",function(state)
-	infiniteAmmoEnabled=state
-end)
-
-noRecoilCB=checkbox(pages[4],20,165,"No Recoil",function(state)
-	noRecoilEnabled=state
-end)
-
-noSpreadCB=checkbox(pages[4],20,200,"No Spread",function(state)
-	noSpreadEnabled=state
-end)
-
-instantReloadCB=checkbox(pages[4],20,235,"Instant Reload",function(state)
-	instantReloadEnabled=state
-end)
-
-local weaponModsFrame=frame(pages[4],20,270,500,150,Color3.fromRGB(10,10,10))
-round(weaponModsFrame,4)
-stroke(weaponModsFrame,1,Color3.fromRGB(45,45,45),0)
-txt(weaponModsFrame,"Weapon Modifications",14,10,10,200,18,Color3.fromRGB(255,255,255),Enum.Font.Code)
-
-local damageSlider=nil
-local fireRateSlider=nil
-local rangeSlider=nil
-local currentDamage=100
-local currentFireRate=1
-local currentRange=100
-
-damageSlider=slider(weaponModsFrame,10,40,200,50,500,100,function(v)
-	currentDamage=v
-	local tool=Player.Character and Player.Character:FindFirstChildOfClass("Tool")
-	if tool then
-		local damageMultiplier=tool:GetAttribute("DamageMultiplier") or 1
-		tool:SetAttribute("DamageMultiplier",v/100)
-	end
-end)
-txt(weaponModsFrame,"Damage %",14,10,75,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-
-fireRateSlider=slider(weaponModsFrame,10,90,200,0.1,10,1,function(v)
-	currentFireRate=v
-	local tool=Player.Character and Player.Character:FindFirstChildOfClass("Tool")
-	if tool and noFireCooldownEnabled then
-		tool:SetAttribute("fireRate",0)
-	elseif tool then
-		tool:SetAttribute("fireRate",1/v)
-	end
-end)
-txt(weaponModsFrame,"Fire Rate (x)",14,10,125,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-
-rangeSlider=slider(weaponModsFrame,10,140,200,50,500,100,function(v)
-	currentRange=v
-	local tool=Player.Character and Player.Character:FindFirstChildOfClass("Tool")
-	if tool then
-		tool:SetAttribute("Range",v)
-	end
-end)
-txt(weaponModsFrame,"Range %",14,10,175,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-
-Player.CharacterAdded:Connect(function(char)
-	wait(0.5)
-	local tool=char:FindFirstChildOfClass("Tool")
-	if tool then
-		if noFireCooldownEnabled then
-			tool:SetAttribute("fireRate",0)
-		end
-		if currentDamage then
-			tool:SetAttribute("DamageMultiplier",currentDamage/100)
-		end
-		if currentRange then
-			tool:SetAttribute("Range",currentRange)
-		end
-	end
-end)
-
 RunService.RenderStepped:Connect(function()
-	if noRecoilEnabled then
-		local tool=Player.Character and Player.Character:FindFirstChildOfClass("Tool")
-		if tool then
-			local cameraShake=tool:FindFirstChild("CameraShake")
-			if cameraShake then
-				cameraShake:Destroy()
-			end
-		end
+	if fovCircleEnabled then
+		fovCircle.Radius=fovRadius
+		fovCircle.Color=fovCircleColor
+		fovCircle.Position=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
+		fovCircle.Visible=true
+	else
+		fovCircle.Visible=false
 	end
+	updateTracers()
 end)
 
-RunService.Stepped:Connect(function()
-	if infiniteAmmoEnabled then
-		local tool=Player.Character and Player.Character:FindFirstChildOfClass("Tool")
-		if tool then
-			for _,v in pairs(tool:GetDescendants()) do
-				if v:IsA("NumberValue") and (v.Name:lower():find("ammo") or v.Name:lower():find("bullet")) then
-					v.Value=9999
-				end
-			end
-		end
-		local backpack=Player.Backpack
-		for _,tool in ipairs(backpack:GetChildren()) do
-			if tool:IsA("Tool") then
-				for _,v in pairs(tool:GetDescendants()) do
-					if v:IsA("NumberValue") and (v.Name:lower():find("ammo") or v.Name:lower():find("bullet")) then
-						v.Value=9999
-					end
-				end
-			end
-		end
-	end
-end)
-
-txt(pages[5],"Settings",18,16,160,18,Color3.fromRGB(255,255,255),Enum.Font.Code)
+txt(pages[4],"Settings",18,20,16,160,18,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local blurOn=false
-local blurToggle=btn(pages[5],"",20,42,18,18)
+local blurToggle=btn(pages[4],"",20,42,18,18)
 blurToggle.TextSize=16
-txt(pages[5],"Enable Blur",16,46,42,160,18,Color3.fromRGB(230,230,230),Enum.Font.Code)
+txt(pages[4],"Enable Blur",16,46,42,160,18,Color3.fromRGB(230,230,230),Enum.Font.Code)
 
 blurToggle.MouseButton1Click:Connect(function()
 	blurOn=not blurOn
@@ -1104,22 +858,21 @@ blurToggle.MouseButton1Click:Connect(function()
 end)
 
 local fieldOfView=70
-txt(pages[5],"Field of View",14,20,80,120,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-local fovSlider=slider(pages[5],20,100,200,30,120,70,function(v)
+txt(pages[4],"Field of View",14,20,80,120,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+local fovSlider=slider(pages[4],20,100,200,30,120,70,function(v)
 	fieldOfView=v
 	Camera.FieldOfView=v
 end)
 
-txt(pages[5],"Themes",14,20,140,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+txt(pages[4],"Themes",14,20,140,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
 
 local currentTheme="Default"
 local themes={
-	{name="Default", bg=Color3.fromRGB(7,7,7), fg=Color3.fromRGB(6,6,6)},
-	{name="Blue", bg=Color3.fromRGB(7,20,40), fg=Color3.fromRGB(6,18,38)},
-	{name="Rainbow", bg=Color3.fromRGB(7,7,7), fg=Color3.fromRGB(6,6,6)},
-	{name="Dark", bg=Color3.fromRGB(3,3,3), fg=Color3.fromRGB(2,2,2)},
-	{name="Red", bg=Color3.fromRGB(40,7,7), fg=Color3.fromRGB(38,6,6)},
-	{name="Purple", bg=Color3.fromRGB(20,7,40), fg=Color3.fromRGB(18,6,38)}
+	{name="Default", bg=Color3.fromRGB(7,7,7), fg=Color3.fromRGB(6,6,6), accent=Color3.fromRGB(255,255,255)},
+	{name="Blue", bg=Color3.fromRGB(7,20,40), fg=Color3.fromRGB(6,18,38), accent=Color3.fromRGB(0,150,255)},
+	{name="Rainbow", bg=Color3.fromRGB(7,7,7), fg=Color3.fromRGB(6,6,6), accent=nil},
+	{name="Dark", bg=Color3.fromRGB(3,3,3), fg=Color3.fromRGB(2,2,2), accent=Color3.fromRGB(100,100,100)},
+	{name="Transparent", bg=Color3.fromRGB(7,7,7), fg=Color3.fromRGB(6,6,6), accent=Color3.fromRGB(255,255,255)}
 }
 
 local rainbowHue=0
@@ -1157,11 +910,19 @@ local function applyTheme(themeName)
 						btn.BackgroundColor3=t.bg
 					end
 				end
-				main.BackgroundTransparency=0
-				top.BackgroundTransparency=0
-				left.BackgroundTransparency=0
-				content.BackgroundTransparency=0
-				bottom.BackgroundTransparency=0
+				if themeName=="Transparent" then
+					main.BackgroundTransparency=0.5
+					top.BackgroundTransparency=0.5
+					left.BackgroundTransparency=0.5
+					content.BackgroundTransparency=0.5
+					bottom.BackgroundTransparency=0.5
+				else
+					main.BackgroundTransparency=0
+					top.BackgroundTransparency=0
+					left.BackgroundTransparency=0
+					content.BackgroundTransparency=0
+					bottom.BackgroundTransparency=0
+				end
 			end
 			break
 		end
@@ -1170,7 +931,7 @@ end
 
 local themeY=160
 for i,t in ipairs(themes) do
-	local themeBtn=btn(pages[5],t.name,20,themeY,120,30)
+	local themeBtn=btn(pages[4],t.name,20,themeY,120,30)
 	themeBtn.MouseButton1Click:Connect(function()
 		applyTheme(t.name)
 	end)
@@ -1178,9 +939,11 @@ for i,t in ipairs(themes) do
 end
 
 local watermarkEnabled=false
-local watermarkText="Clownware"
+local autoExecuteEnabled=false
+local watermarkText="Clownware | discord.gg/clownffware"
 
 local watermarkCB=nil
+local autoExecuteCB=nil
 local watermarkGui=nil
 
 local function createWatermark()
@@ -1241,13 +1004,17 @@ local function createWatermark()
 	end)
 end
 
-watermarkCB=checkbox(pages[5],20,340,"Watermark",function(state)
+watermarkCB=checkbox(pages[4],20,340,"Watermark",function(state)
 	watermarkEnabled=state
 	if watermarkGui then
 		watermarkGui.Enabled=state
 	elseif state then
 		createWatermark()
 	end
+end)
+
+autoExecuteCB=checkbox(pages[4],20,375,"Auto-Execute",function(state)
+	autoExecuteEnabled=state
 end)
 
 createWatermark()
@@ -1257,9 +1024,6 @@ local function saveConfig()
 	local config={
 		aimbotEnabled=aimbotEnabled,
 		triggerBotEnabled=triggerBotEnabled,
-		silentAimEnabled=silentAimEnabled,
-		visibleCheckEnabled=visibleCheckEnabled,
-		predictionEnabled=predictionEnabled,
 		aimbotTarget=aimbotTarget,
 		aimbotFov=aimbotFov,
 		aimbotSmoothness=aimbotSmoothness,
@@ -1272,9 +1036,6 @@ local function saveConfig()
 		superSprintSpeed=superSprintSpeed,
 		rapidFireEnabled=rapidFireEnabled,
 		espEnabled=espEnabled,
-		boxEspEnabled=boxEspEnabled,
-		healthBarEnabled=healthBarEnabled,
-		nameTagsEnabled=nameTagsEnabled,
 		espColorR=espColor.R,
 		espColorG=espColor.G,
 		espColorB=espColor.B,
@@ -1287,18 +1048,10 @@ local function saveConfig()
 		fovCircleColorG=fovCircleColor.G,
 		fovCircleColorB=fovCircleColor.B,
 		fovRadius=fovRadius,
-		weaponRapidFireEnabled=weaponRapidFireEnabled,
-		noFireCooldownEnabled=noFireCooldownEnabled,
-		infiniteAmmoEnabled=infiniteAmmoEnabled,
-		noRecoilEnabled=noRecoilEnabled,
-		noSpreadEnabled=noSpreadEnabled,
-		instantReloadEnabled=instantReloadEnabled,
-		currentDamage=currentDamage,
-		currentFireRate=currentFireRate,
-		currentRange=currentRange,
 		blurOn=blurOn,
 		fieldOfView=fieldOfView,
 		watermarkEnabled=watermarkEnabled,
+		autoExecuteEnabled=autoExecuteEnabled,
 		currentTheme=currentTheme
 	}
 	if writefile and isfile then
@@ -1315,18 +1068,12 @@ local function loadConfig()
 	
 	aimbotEnabled=data.aimbotEnabled
 	triggerBotEnabled=data.triggerBotEnabled
-	silentAimEnabled=data.silentAimEnabled
-	visibleCheckEnabled=data.visibleCheckEnabled
-	predictionEnabled=data.predictionEnabled
 	aimbotTarget=data.aimbotTarget or "Head"
 	aimbotFov=data.aimbotFov or 200
 	aimbotSmoothness=data.aimbotSmoothness or 0.15
 	targetIdx=data.targetIdx or 1
 	if aimbotCB then aimbotCB.Set(aimbotEnabled) end
 	if triggerBotCB then triggerBotCB.Set(triggerBotEnabled) end
-	if silentAimCB then silentAimCB.Set(silentAimEnabled) end
-	if visibleCheckCB then visibleCheckCB.Set(visibleCheckEnabled) end
-	if predictionCB then predictionCB.Set(predictionEnabled) end
 	if aimbotDropdown then aimbotDropdown.Text=aimbotTarget end
 	if aimbotFovSlider then aimbotFovSlider.Set(aimbotFov) end
 	if aimbotSmoothSlider then aimbotSmoothSlider.Set(aimbotSmoothness) end
@@ -1361,7 +1108,10 @@ local function loadConfig()
 	end
 	
 	if rapidFireEnabled then
-		if rapidFireConn then rapidFireConn:Disconnect() end
+		if rapidFireConn then
+			rapidFireConn:Disconnect()
+			rapidFireConn=nil
+		end
 		rapidFireConn=RunService.RenderStepped:Connect(function()
 			if rapidFireEnabled and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
 				fireTool()
@@ -1370,9 +1120,6 @@ local function loadConfig()
 	end
 	
 	espEnabled=data.espEnabled
-	boxEspEnabled=data.boxEspEnabled or false
-	healthBarEnabled=data.healthBarEnabled or false
-	nameTagsEnabled=data.nameTagsEnabled or false
 	espColor=Color3.fromRGB(data.espColorR or 0,data.espColorG or 0,data.espColorB or 0)
 	tracersEnabled=data.tracersEnabled
 	tracerColor=Color3.fromRGB(data.tracerColorR or 255,data.tracerColorG or 255,data.tracerColorB or 255)
@@ -1381,9 +1128,6 @@ local function loadConfig()
 	fovRadius=data.fovRadius or 200
 	
 	if espCB then espCB.Set(espEnabled) end
-	if boxEspCB then boxEspCB.Set(boxEspEnabled) end
-	if healthBarCB then healthBarCB.Set(healthBarEnabled) end
-	if nameTagsCB then nameTagsCB.Set(nameTagsEnabled) end
 	if tracersCB then tracersCB.Set(tracersEnabled) end
 	if fovCircleCB then fovCircleCB.Set(fovCircleEnabled) end
 	if fovRadiusSlider then fovRadiusSlider.Set(fovRadius) end
@@ -1397,29 +1141,10 @@ local function loadConfig()
 		end)
 	end
 	
-	weaponRapidFireEnabled=data.weaponRapidFireEnabled or false
-	noFireCooldownEnabled=data.noFireCooldownEnabled or false
-	infiniteAmmoEnabled=data.infiniteAmmoEnabled or false
-	noRecoilEnabled=data.noRecoilEnabled or false
-	noSpreadEnabled=data.noSpreadEnabled or false
-	instantReloadEnabled=data.instantReloadEnabled or false
-	currentDamage=data.currentDamage or 100
-	currentFireRate=data.currentFireRate or 1
-	currentRange=data.currentRange or 100
-	
-	if weaponRapidFireCB then weaponRapidFireCB.Set(weaponRapidFireEnabled) end
-	if noFireCooldownCB then noFireCooldownCB.Set(noFireCooldownEnabled) end
-	if infiniteAmmoCB then infiniteAmmoCB.Set(infiniteAmmoEnabled) end
-	if noRecoilCB then noRecoilCB.Set(noRecoilEnabled) end
-	if noSpreadCB then noSpreadCB.Set(noSpreadEnabled) end
-	if instantReloadCB then instantReloadCB.Set(instantReloadEnabled) end
-	if damageSlider then damageSlider.Set(currentDamage) end
-	if fireRateSlider then fireRateSlider.Set(currentFireRate) end
-	if rangeSlider then rangeSlider.Set(currentRange) end
-	
 	blurOn=data.blurOn
 	fieldOfView=data.fieldOfView or 70
 	watermarkEnabled=data.watermarkEnabled
+	autoExecuteEnabled=data.autoExecuteEnabled
 	
 	if blurOn then
 		blurToggle.Text="✓"
@@ -1434,14 +1159,15 @@ local function loadConfig()
 	if watermarkGui then 
 		watermarkGui.Enabled=watermarkEnabled
 	end
+	if autoExecuteCB then autoExecuteCB.Set(autoExecuteEnabled) end
 	
 	if data.currentTheme then
 		applyTheme(data.currentTheme)
 	end
 end
 
-btn(pages[5],"Save Config",20,420,120,30).MouseButton1Click:Connect(saveConfig)
-btn(pages[5],"Load Config",150,420,120,30).MouseButton1Click:Connect(loadConfig)
+btn(pages[4],"Save Config",20,420,120,30).MouseButton1Click:Connect(saveConfig)
+btn(pages[4],"Load Config",150,420,120,30).MouseButton1Click:Connect(loadConfig)
 
 local dragging=false
 local dragStart,startPos,dragInput
@@ -1477,12 +1203,11 @@ local open=true
 local function setMenu(v)
 	open=v
 	main.Visible=v
+	cursor.Visible=v
+	UIS.MouseBehavior=Enum.MouseBehavior.Default
 	if v then
 		UIS.MouseIconEnabled=false
-		customCursor.Visible=true
-		for _,trail in ipairs(cursorTrail) do
-			trail.frame.Visible=true
-		end
+		cursor.Visible=true
 		if blurOn then
 			blur.Enabled=true
 			blur.Size=0
@@ -1490,10 +1215,7 @@ local function setMenu(v)
 		end
 	else
 		UIS.MouseIconEnabled=true
-		customCursor.Visible=false
-		for _,trail in ipairs(cursorTrail) do
-			trail.frame.Visible=false
-		end
+		cursor.Visible=false
 		local tw=TweenService:Create(blur,TweenInfo.new(.2),{Size=0})
 		tw:Play()
 		tw.Completed:Connect(function()
@@ -1504,18 +1226,45 @@ local function setMenu(v)
 	end
 end
 
+loginButton.MouseButton1Click:Connect(function()
+	local enteredKey=keyBox.Text
+	if enteredKey==validKey then
+		isLoggedIn=true
+		loginStatus.Text="Welcome "..Player.Name.."!"
+		loginStatus.TextColor3=Color3.fromRGB(0,255,100)
+		saveKeyToFile(enteredKey)
+		task.wait(1)
+		loginFrame.Visible=false
+		setMenu(true)
+	else
+		loginStatus.Text="Invalid Key!"
+		loginStatus.TextColor3=Color3.fromRGB(255,0,0)
+		keyBox.Text=""
+	end
+end)
+
 UIS.InputBegan:Connect(function(i,gp)
 	if gp then return end
 	if i.KeyCode==Enum.KeyCode.RightShift then
-		setMenu(not open)
+		if isLoggedIn then
+			setMenu(not open)
+		end
 	end
 end)
 
-setMenu(true)
+local savedKey=loadKeyFromFile()
+if savedKey==validKey then
+	isLoggedIn=true
+	loginFrame.Visible=false
+	setMenu(true)
+else
+	isLoggedIn=false
+	loginFrame.Visible=true
+	main.Visible=false
+	cursor.Visible=true
+	UIS.MouseIconEnabled=false
+	UIS.MouseBehavior=Enum.MouseBehavior.Default
+	blur.Enabled=false
+end
+
 loadConfig()
-
-RunService.Heartbeat:Connect(function()
-	if boxEspEnabled or healthBarEnabled or nameTagsEnabled then
-		updateESPVisuals()
-	end
-end)
