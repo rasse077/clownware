@@ -209,9 +209,27 @@ cursor.AnchorPoint=Vector2.new(0.5,0.5)
 cursor.ZIndex=9999
 round(cursor,999)
 
+local cursorUnlocked=false
+
 RunService.RenderStepped:Connect(function()
     local currentPos=UIS:GetMouseLocation()
     cursor.Position=UDim2.fromOffset(currentPos.X,currentPos.Y)
+end)
+
+UIS.InputBegan:Connect(function(input, gameProcessed)
+    if gameProcessed then return end
+    if input.KeyCode==Enum.KeyCode.F then
+        cursorUnlocked=not cursorUnlocked
+        if cursorUnlocked then
+            UIS.MouseBehavior=Enum.MouseBehavior.Default
+            UIS.MouseIconEnabled=true
+            cursor.Visible=false
+        else
+            UIS.MouseBehavior=Enum.MouseBehavior.Default
+            UIS.MouseIconEnabled=false
+            cursor.Visible=true
+        end
+    end
 end)
 
 local main=frame(gui,0,0,770,520,Color3.fromRGB(7,7,7))
@@ -386,7 +404,7 @@ aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
 	if aimbotEnabled then
 		if aimbotConn then aimbotConn:Disconnect() end
 		aimbotConn=RunService.RenderStepped:Connect(function()
-			if aimbotEnabled then
+			if aimbotEnabled and not cursorUnlocked then
 				local target=getClosestPlayerInFov()
 				if target and target.Character then
 					local aimPart=target.Character:FindFirstChild(aimbotTarget) or target.Character:FindFirstChild("HumanoidRootPart")
@@ -411,7 +429,7 @@ triggerBotCB=checkbox(pages[1],20,90,"Trigger Bot",function(state)
 	if triggerBotEnabled then
 		if triggerBotConn then triggerBotConn:Disconnect() end
 		triggerBotConn=RunService.RenderStepped:Connect(function()
-			if triggerBotEnabled then
+			if triggerBotEnabled and not cursorUnlocked then
 				local target=getClosestPlayerInFov()
 				if target and target.Character then
 					local aimPart=target.Character:FindFirstChild(aimbotTarget) or target.Character:FindFirstChild("HumanoidRootPart")
@@ -1203,19 +1221,25 @@ local open=true
 local function setMenu(v)
 	open=v
 	main.Visible=v
-	cursor.Visible=v
+	if not cursorUnlocked then
+		cursor.Visible=v
+	end
 	UIS.MouseBehavior=Enum.MouseBehavior.Default
 	if v then
-		UIS.MouseIconEnabled=false
-		cursor.Visible=true
+		if not cursorUnlocked then
+			UIS.MouseIconEnabled=false
+			cursor.Visible=true
+		end
 		if blurOn then
 			blur.Enabled=true
 			blur.Size=0
 			TweenService:Create(blur,TweenInfo.new(.2),{Size=18}):Play()
 		end
 	else
-		UIS.MouseIconEnabled=true
-		cursor.Visible=false
+		if not cursorUnlocked then
+			UIS.MouseIconEnabled=true
+			cursor.Visible=false
+		end
 		local tw=TweenService:Create(blur,TweenInfo.new(.2),{Size=0})
 		tw:Play()
 		tw.Completed:Connect(function()
