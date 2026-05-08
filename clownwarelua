@@ -209,25 +209,26 @@ cursor.AnchorPoint=Vector2.new(0.5,0.5)
 cursor.ZIndex=9999
 round(cursor,999)
 
-local cursorUnlocked=false
+local cursorLocked=true
 
 RunService.RenderStepped:Connect(function()
-    local currentPos=UIS:GetMouseLocation()
-    cursor.Position=UDim2.fromOffset(currentPos.X,currentPos.Y)
+    if not cursorLocked then
+        local currentPos=UIS:GetMouseLocation()
+        cursor.Position=UDim2.fromOffset(currentPos.X,currentPos.Y)
+    end
 end)
 
 UIS.InputBegan:Connect(function(input, gameProcessed)
-    if gameProcessed then return end
     if input.KeyCode==Enum.KeyCode.F then
-        cursorUnlocked=not cursorUnlocked
-        if cursorUnlocked then
-            UIS.MouseBehavior=Enum.MouseBehavior.Default
-            UIS.MouseIconEnabled=true
-            cursor.Visible=false
-        else
+        cursorLocked=not cursorLocked
+        if cursorLocked then
             UIS.MouseBehavior=Enum.MouseBehavior.Default
             UIS.MouseIconEnabled=false
             cursor.Visible=true
+        else
+            UIS.MouseBehavior=Enum.MouseBehavior.Default
+            UIS.MouseIconEnabled=true
+            cursor.Visible=false
         end
     end
 end)
@@ -404,7 +405,7 @@ aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
 	if aimbotEnabled then
 		if aimbotConn then aimbotConn:Disconnect() end
 		aimbotConn=RunService.RenderStepped:Connect(function()
-			if aimbotEnabled and not cursorUnlocked then
+			if aimbotEnabled and cursorLocked then
 				local target=getClosestPlayerInFov()
 				if target and target.Character then
 					local aimPart=target.Character:FindFirstChild(aimbotTarget) or target.Character:FindFirstChild("HumanoidRootPart")
@@ -429,7 +430,7 @@ triggerBotCB=checkbox(pages[1],20,90,"Trigger Bot",function(state)
 	if triggerBotEnabled then
 		if triggerBotConn then triggerBotConn:Disconnect() end
 		triggerBotConn=RunService.RenderStepped:Connect(function()
-			if triggerBotEnabled and not cursorUnlocked then
+			if triggerBotEnabled and cursorLocked then
 				local target=getClosestPlayerInFov()
 				if target and target.Character then
 					local aimPart=target.Character:FindFirstChild(aimbotTarget) or target.Character:FindFirstChild("HumanoidRootPart")
@@ -1221,14 +1222,19 @@ local open=true
 local function setMenu(v)
 	open=v
 	main.Visible=v
-	if not cursorUnlocked then
+	if cursorLocked then
 		cursor.Visible=v
+	else
+		cursor.Visible=false
 	end
 	UIS.MouseBehavior=Enum.MouseBehavior.Default
 	if v then
-		if not cursorUnlocked then
+		if cursorLocked then
 			UIS.MouseIconEnabled=false
 			cursor.Visible=true
+		else
+			UIS.MouseIconEnabled=true
+			cursor.Visible=false
 		end
 		if blurOn then
 			blur.Enabled=true
@@ -1236,7 +1242,10 @@ local function setMenu(v)
 			TweenService:Create(blur,TweenInfo.new(.2),{Size=18}):Play()
 		end
 	else
-		if not cursorUnlocked then
+		if cursorLocked then
+			UIS.MouseIconEnabled=true
+			cursor.Visible=false
+		else
 			UIS.MouseIconEnabled=true
 			cursor.Visible=false
 		end
