@@ -208,7 +208,7 @@ local customCursor=frame(gui,0,0,8,8,Color3.fromRGB(255,255,255))
 customCursor.AnchorPoint=Vector2.new(0.5,0.5)
 customCursor.ZIndex=9999
 round(customCursor,999)
-customCursor.Visible=false
+customCursor.Visible=true
 
 RunService.RenderStepped:Connect(function()
 	local currentPos=UIS:GetMouseLocation()
