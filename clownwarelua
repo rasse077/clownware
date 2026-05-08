@@ -1,4 +1,5 @@
-
+-- skidding this = gay move 
+-- clownware v1 made by trazz 
 local UIS=game:GetService("UserInputService")
 local TweenService=game:GetService("TweenService")
 local Lighting=game:GetService("Lighting")
