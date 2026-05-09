@@ -381,7 +381,7 @@ local function fireTool()
 	end
 end
 
--- FIXED AIMBOT
+-- IMPROVED AIMBOT (visible movement)
 aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
 	aimbotEnabled=state
 	if aimbotEnabled then
@@ -396,9 +396,13 @@ aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
 						local camPos=Camera.CFrame.Position
 						local lookVec=(targetPos-camPos).Unit
 						local currentLook=Camera.CFrame.LookVector
-						local lerpFactor=math.clamp(aimbotSmoothness,0.05,0.5)
-						local lerpedLook=currentLook:Lerp(lookVec, lerpFactor).Unit
-						Camera.CFrame=CFrame.new(camPos, camPos+lerpedLook)
+						local maxRot = aimbotSmoothness * 0.05
+						local angle = math.acos(math.clamp(currentLook:Dot(lookVec), -1, 1))
+						if angle > 0.01 then
+							local rotFactor = math.min(1, maxRot / angle)
+							local finalLook = currentLook:Lerp(lookVec, rotFactor).Unit
+							Camera.CFrame = CFrame.new(camPos, camPos + finalLook)
+						end
 					end
 				end
 			end
@@ -411,7 +415,6 @@ aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
 	end
 end)
 
--- FIXED TRIGGER BOT
 triggerBotCB=checkbox(pages[1],20,90,"Trigger Bot",function(state)
 	triggerBotEnabled=state
 	if triggerBotEnabled then
