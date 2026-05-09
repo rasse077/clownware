@@ -1200,12 +1200,14 @@ end)
 
 local open=true
 
+-- Cursor fix: keep mouse unlocked while menu is open
+local mouseFixConn
 local function setMenu(v)
 	open=v
 	main.Visible=v
 	cursor.Visible=v
-	UIS.MouseBehavior=Enum.MouseBehavior.Default
 	if v then
+		UIS.MouseBehavior=Enum.MouseBehavior.Default
 		UIS.MouseIconEnabled=false
 		cursor.Visible=true
 		if blurOn then
@@ -1213,7 +1215,19 @@ local function setMenu(v)
 			blur.Size=0
 			TweenService:Create(blur,TweenInfo.new(.2),{Size=18}):Play()
 		end
+		-- continuously override mouse behavior to prevent game from locking it
+		if not mouseFixConn then
+			mouseFixConn=RunService.RenderStepped:Connect(function()
+				if main.Visible then
+					UIS.MouseBehavior=Enum.MouseBehavior.Default
+				end
+			end)
+		end
 	else
+		if mouseFixConn then
+			mouseFixConn:Disconnect()
+			mouseFixConn=nil
+		end
 		UIS.MouseIconEnabled=true
 		cursor.Visible=false
 		local tw=TweenService:Create(blur,TweenInfo.new(.2),{Size=0})
