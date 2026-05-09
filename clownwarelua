@@ -381,6 +381,7 @@ local function fireTool()
 	end
 end
 
+-- FIXED AIMBOT
 aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
 	aimbotEnabled=state
 	if aimbotEnabled then
@@ -391,9 +392,13 @@ aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
 				if target and target.Character then
 					local aimPart=target.Character:FindFirstChild(aimbotTarget) or target.Character:FindFirstChild("HumanoidRootPart")
 					if aimPart then
-						local targetCF=CFrame.new(Camera.CFrame.Position,aimPart.Position)
+						local targetPos=aimPart.Position
+						local camPos=Camera.CFrame.Position
+						local lookVec=(targetPos-camPos).Unit
+						local currentLook=Camera.CFrame.LookVector
 						local lerpFactor=math.clamp(aimbotSmoothness,0.05,0.5)
-						Camera.CFrame=Camera.CFrame:Lerp(targetCF,lerpFactor)
+						local lerpedLook=currentLook:Lerp(lookVec, lerpFactor).Unit
+						Camera.CFrame=CFrame.new(camPos, camPos+lerpedLook)
 					end
 				end
 			end
@@ -406,6 +411,7 @@ aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
 	end
 end)
 
+-- FIXED TRIGGER BOT
 triggerBotCB=checkbox(pages[1],20,90,"Trigger Bot",function(state)
 	triggerBotEnabled=state
 	if triggerBotEnabled then
@@ -416,8 +422,7 @@ triggerBotCB=checkbox(pages[1],20,90,"Trigger Bot",function(state)
 				if target and target.Character then
 					local aimPart=target.Character:FindFirstChild(aimbotTarget) or target.Character:FindFirstChild("HumanoidRootPart")
 					if aimPart then
-						local targetCF=CFrame.new(Camera.CFrame.Position,aimPart.Position)
-						local distance=(targetCF.Position-Camera.CFrame.Position).Magnitude
+						local distance=(aimPart.Position-Camera.CFrame.Position).Magnitude
 						if distance<50 then
 							fireTool()
 						end
@@ -1199,9 +1204,8 @@ UIS.InputChanged:Connect(function(i)
 end)
 
 local open=true
-
--- Cursor fix: keep mouse unlocked while menu is open
 local mouseFixConn
+
 local function setMenu(v)
 	open=v
 	main.Visible=v
@@ -1215,7 +1219,6 @@ local function setMenu(v)
 			blur.Size=0
 			TweenService:Create(blur,TweenInfo.new(.2),{Size=18}):Play()
 		end
-		-- continuously override mouse behavior to prevent game from locking it
 		if not mouseFixConn then
 			mouseFixConn=RunService.RenderStepped:Connect(function()
 				if main.Visible then
