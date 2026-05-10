@@ -820,7 +820,8 @@ end
 RunService.RenderStepped:Connect(function()
     if fovCircleEnabled then
         fovCircle.Radius=fovRadius
-        fovCircle.Color=fovCircleColor        fovCircle.Position=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
+        fovCircle.Color=fovCircleColor
+        fovCircle.Position=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
         fovCircle.Visible=true
     else
         fovCircle.Visible=false
@@ -835,18 +836,13 @@ weaponImageContainer.Position=UDim2.new(1,-140,0,10)
 round(weaponImageContainer,6)
 stroke(weaponImageContainer,1,Color3.fromRGB(55,55,55),0)
 
-local weaponImage=nil
-if isfile and isfile(weaponImagePath) then
-    weaponImage=Instance.new("ImageLabel")
-    weaponImage.Parent=weaponImageContainer
-    weaponImage.Size=UDim2.new(1,0,1,0)
-    weaponImage.BackgroundTransparency=1
-    weaponImage.Image="rbxassetid://" .. tostring(game:GetObjects("rbxassetid://0")[1] and "0" or "0")
-    pcall(function()
-        weaponImage.Image="rbxasset://" .. weaponImagePath
-    end)
-    round(weaponImage,6)
-end
+local weaponImage=Instance.new("ImageLabel")
+weaponImage.Parent=weaponImageContainer
+weaponImage.Size=UDim2.new(1,0,1,0)
+weaponImage.BackgroundTransparency=1
+weaponImage.Image="rbxasset://" .. weaponImagePath
+weaponImage.ScaleType=Enum.ScaleType.Fit
+round(weaponImage,6)
 
 local weaponModsEnabled=false
 local noWeaponDelay=false
@@ -921,7 +917,7 @@ local function applyWeaponMods(weapon)
             if backpack then
                 for _,tool in ipairs(backpack:GetChildren()) do
                     if tool:IsA("Tool") and tool:FindFirstChild("Ammo") then
-                        tool.Ammo.Value=tool.Ammo.MaxValue
+                        tool.Ammo.Value=tool.Ammo:FindFirstChild("MaxValue") and tool.Ammo.MaxValue or 999
                     end
                 end
             end
@@ -1501,6 +1497,7 @@ loginButton.MouseButton1Click:Connect(function()
         saveKeyToFile(enteredKey)
         task.wait(1)
         loginFrame.Visible=false
+        main.Visible=true
         setMenu(true)
     else
         loginStatus.Text="Invalid Key!"
@@ -1522,6 +1519,7 @@ local savedKey=loadKeyFromFile()
 if savedKey==validKey then
     isLoggedIn=true
     loginFrame.Visible=false
+    main.Visible=true
     setMenu(true)
 else
     isLoggedIn=false
