@@ -391,7 +391,6 @@ for i,v in ipairs(tabButtons) do
     end)
 end
 
--- SKIN CHANGER INTEGRATION
 local RS = game:GetService("ReplicatedStorage")
 local CAS = game:GetService("ContextActionService")
 local Characters = workspace:WaitForChild("Characters")
@@ -706,7 +705,6 @@ local function CreateSkinDropdown(weaponName, container, yPos)
     return dp
 end
 
--- Skin Tab UI
 local skinPage = pages[5]
 txt(skinPage, "Skin Changer", 20, 20, 18, 200, 20, Color3.fromRGB(255,255,255), Enum.Font.Code)
 
@@ -784,9 +782,6 @@ local function updateScroll()
     scrollBar.Visible = maxOffset > 0
 end
 
-scrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollList.Size.Y.Offset)
-scrollFrame.ScrollBarThickness = 0
-
 scrollFrame.InputMouseWheel:Connect(function(_, delta)
     if not scrollFrame.Visible then return end
     local maxOffset = math.max(0, scrollList.Size.Y.Offset - scrollFrame.Size.Y.Offset)
@@ -837,7 +832,6 @@ task.spawn(function()
     end
 end)
 
--- Aimbot Tab (Original)
 txt(pages[1],"Aimbot",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local aimbotEnabled=false
@@ -965,7 +959,6 @@ local aimbotSmoothSlider=slider(pages[1],20,280,200,0.05,0.5,0.15,function(v)
     aimbotSmoothness=v
 end)
 
--- Movement Tab (Original)
 txt(pages[2],"Movement",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local flyEnabled=false
@@ -979,8 +972,6 @@ local noclipConn=nil
 local superJumpEnabled=false
 local superSprintEnabled=false
 local superSprintSpeed=30
-local rapidFireEnabled=false
-local rapidFireConn=nil
 
 local function startFly()
     local char=Player.Character
@@ -1108,7 +1099,6 @@ local superSprintSlider=slider(pages[2],20,290,200,16,100,30,function(v)
     end
 end)
 
--- Visuals Tab (Original)
 txt(pages[3],"Visuals",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local espEnabled=false
@@ -1291,7 +1281,6 @@ RunService.RenderStepped:Connect(function()
     updateTracers()
 end)
 
--- Weapons Tab (Original)
 txt(pages[4],"Weapons",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local weaponImageContainer=frame(pages[4],549-130,0,130,130,Color3.fromRGB(10,10,10))
@@ -1516,7 +1505,6 @@ local fireRateSlider=slider(pages[4],20,310,200,1,5,1,function(v)
     end
 end)
 
--- Settings Tab (Original)
 txt(pages[6],"Settings",18,20,16,160,18,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local blurOn=false
@@ -1715,7 +1703,6 @@ local function saveConfig()
         noClipEnabled=noClipEnabled,
         superSprintEnabled=superSprintEnabled,
         superSprintSpeed=superSprintSpeed,
-        rapidFireEnabled=rapidFireEnabled,
         espEnabled=espEnabled,
         espColorR=espColor.R,
         espColorG=espColor.G,
@@ -1778,7 +1765,6 @@ local function loadConfig()
     noClipEnabled=data.noClipEnabled
     superSprintEnabled=data.superSprintEnabled
     superSprintSpeed=data.superSprintSpeed or 30
-    rapidFireEnabled=data.rapidFireEnabled
     
     if flyCB then flyCB.Set(flyEnabled) end
     if flySpeedSlider then flySpeedSlider.Set(flySpeed) end
