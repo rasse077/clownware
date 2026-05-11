@@ -236,6 +236,37 @@ local function slider(p,x,y,w,min,max,default,callback)
     }
 end
 
+local function dropdown(p,x,y,w,options,default,callback)
+    local dpBtn=btn(p,default or options[1],x,y,w,30)
+    local dpFrame=frame(p,x,y+30,w,30*#options,Color3.fromRGB(12,12,12))
+    dpFrame.Visible=false
+    round(dpFrame,4)
+    stroke(dpFrame,1,Color3.fromRGB(55,55,55),0)
+    local dpOptions={}
+    for i,opt in ipairs(options) do
+        local optBtn=btn(dpFrame,opt,0,(i-1)*30,w,30)
+        optBtn.BackgroundColor3=Color3.fromRGB(12,12,12)
+        optBtn.MouseButton1Click:Connect(function()
+            dpBtn.Text=opt
+            dpFrame.Visible=false
+            if callback then callback(opt) end
+        end)
+        dpOptions[opt]=optBtn
+    end
+    dpBtn.MouseButton1Click:Connect(function()
+        dpFrame.Visible=not dpFrame.Visible
+    end)
+    return {
+        Set=function(opt)
+            if dpOptions[opt] then
+                dpBtn.Text=opt
+                if callback then callback(opt) end
+            end
+        end,
+        Get=function() return dpBtn.Text end
+    }
+end
+
 local cursor=frame(gui,0,0,8,8,Color3.fromRGB(255,255,255))
 cursor.AnchorPoint=Vector2.new(0.5,0.5)
 cursor.ZIndex=9999
@@ -327,7 +358,8 @@ local tabs={
     {"Movement",62},
     {"Visuals",104},
     {"Weapons",146},
-    {"Settings",188}
+    {"Skin",188},
+    {"Settings",230}
 }
 
 local pages={}
@@ -359,6 +391,453 @@ for i,v in ipairs(tabButtons) do
     end)
 end
 
+-- SKIN CHANGER INTEGRATION
+local RS = game:GetService("ReplicatedStorage")
+local CAS = game:GetService("ContextActionService")
+local Characters = workspace:WaitForChild("Characters")
+
+local SkinChangerEnabled = false
+local SelectedSkins = {}
+local WEAR = "Factory New"
+local scriptRunning = false
+local selectedKnife = "Butterfly Knife"
+local spawned = false
+local inspecting = false
+local swinging = false
+local lastAttackTime = 0
+local ATTACK_COOLDOWN = 1
+local ACTION_INSPECT = "InspectKnifeAction"
+local ACTION_ATTACK = "AttackKnifeAction"
+
+local vm, animator
+local equipAnim, idleAnim, inspectAnim
+local HeavySwingAnim, Swing1Anim, Swing2Anim
+
+local knives = {
+    ["Karambit"] = {Offset = CFrame.new(0, -1.5, 1.5)},
+    ["Butterfly Knife"] = {Offset = CFrame.new(0, -1.5, 1.5)},
+    ["M9 Bayonet"] = {Offset = CFrame.new(0, -1.5, 1)},
+    ["Flip Knife"] = {Offset = CFrame.new(0, -1.5, 1.25)},
+    ["Gut Knife"] = {Offset = CFrame.new(0, -1.5, 0.5)},
+}
+
+local CT_ONLY = {
+    ["USP-S"] = true, ["Five-SeveN"] = true, ["MP9"] = true,
+    ["FAMAS"] = true, ["M4A1-S"] = true, ["M4A4"] = true, ["AUG"] = true
+}
+
+local SHARED = {
+    ["P250"] = true, ["Desert Eagle"] = true, ["Dual Berettas"] = true,
+    ["Negev"] = true, ["P90"] = true, ["Nova"] = true, ["XM1014"] = true,
+    ["AWP"] = true, ["SSG 08"] = true
+}
+
+local KNIVES = {
+    ["Karambit"] = true, ["Butterfly Knife"] = true, ["M9 Bayonet"] = true,
+    ["Flip Knife"] = true, ["Gut Knife"] = true, ["T Knife"] = true, ["CT Knife"] = true
+}
+
+local GLOVES = {
+    ["Sports Gloves"] = true
+}
+
+local IgnoreFolders = {
+    ["HE Grenade"] = true, ["Incendiary Grenade"] = true, ["Molotov"] = true,
+    ["Smoke Grenade"] = true, ["Flashbang"] = true, ["Decoy Grenade"] = true,
+    ["C4"] = true, ["CT Glove"] = true, ["T Glove"] = true
+}
+
+local function isAlive()
+    local t = Characters:FindFirstChild("Terrorists")
+    local ct = Characters:FindFirstChild("Counter-Terrorists")
+    return (t and t:FindFirstChild(Player.Name)) or (ct and ct:FindFirstChild(Player.Name))
+end
+
+local function getKnifeInCamera()
+    return Camera:FindFirstChild("T Knife") or Camera:FindFirstChild("CT Knife")
+end
+
+local function cleanPart(part)
+    if not part:IsA("BasePart") then return end
+    part.CanCollide = false
+    part.Anchored = false
+    part.CastShadow = false
+    part.CanTouch = false
+    part.CanQuery = false
+end
+
+local function disableCollisions(model)
+    for _, part in model:GetDescendants() do
+        cleanPart(part)
+    end
+end
+
+local function hideOriginalKnife(knife)
+    for _, part in knife:GetDescendants() do
+        if part:IsA("BasePart") or part:IsA("MeshPart") then
+            part.Transparency = 1
+        end
+        if part:IsA("Texture") then
+            part.Transparency = 1
+        end
+    end
+end
+
+local function playSound(folder, name)
+    local weaponSounds = RS.Sounds:FindFirstChild(selectedKnife)
+    if not weaponSounds then return end
+    local sound = weaponSounds:FindFirstChild(folder):FindFirstChild(name):Clone()
+    sound.Parent = Camera
+    sound:Play()
+    sound.Ended:Once(function() sound:Destroy() end)
+    return sound
+end
+
+local function attachAsset(folder, armPartName, assetModelName, finalName, offset)
+    local targetArm = vm:FindFirstChild(armPartName)
+    if not targetArm then return end
+    local assetMesh = folder:FindFirstChild(assetModelName):Clone()
+    cleanPart(assetMesh)
+    assetMesh.Name = finalName
+    assetMesh.Parent = targetArm
+    local motor = Instance.new("Motor6D")
+    motor.Part0 = targetArm
+    motor.Part1 = assetMesh
+    motor.C0 = offset
+    motor.Parent = targetArm
+end
+
+local function handleAction(actionName, inputState, inputObject)
+    if inputState ~= Enum.UserInputState.Begin then
+        return Enum.ContextActionResult.Pass
+    end
+    if not spawned or not animator or not isAlive() then
+        return Enum.ContextActionResult.Pass
+    end
+    if actionName == ACTION_INSPECT then
+        if (equipAnim and equipAnim.IsPlaying) or inspecting or swinging then
+            return Enum.ContextActionResult.Pass
+        end
+        inspecting = true
+        if idleAnim then idleAnim:Stop() end
+        inspectAnim:Play()
+        inspectAnim.Stopped:Once(function() inspecting = false end)
+    elseif actionName == ACTION_ATTACK then
+        local currentTime = os.clock()
+        if (equipAnim and equipAnim.IsPlaying) or (currentTime - lastAttackTime < ATTACK_COOLDOWN) then
+            return Enum.ContextActionResult.Pass
+        end
+        lastAttackTime = currentTime
+        if inspecting then
+            inspecting = false
+            if inspectAnim then inspectAnim:Stop() end
+        end
+        swinging = true
+        if idleAnim then idleAnim:Stop() end
+        local anims = {HeavySwingAnim, Swing1Anim, Swing2Anim}
+        local chosenAnim = anims[math.random(1, #anims)]
+        local soundFolder = 
+            (chosenAnim == HeavySwingAnim and "HitOne") or
+            (chosenAnim == Swing1Anim and "HitTwo") or
+            "HitThree"
+        chosenAnim:Play()
+        local s = playSound(soundFolder, "1")
+        if s then s.Volume = 5 end
+        chosenAnim.Stopped:Once(function() swinging = false end)
+    end
+    return Enum.ContextActionResult.Pass
+end
+
+local function removeViewmodel()
+    spawned = false
+    CAS:UnbindAction(ACTION_INSPECT)
+    CAS:UnbindAction(ACTION_ATTACK)
+    if vm then
+        vm:Destroy()
+        vm = nil
+    end
+    animator = nil
+    inspecting = false
+    swinging = false
+end
+
+local function spawnViewmodel(knife)
+    if spawned or not scriptRunning then return end
+    local myModel = isAlive()
+    if not myModel then return end
+    spawned = true
+    local knifeTemplate = RS.Assets.Weapons:FindFirstChild(selectedKnife)
+    local knifeOffset = knives[selectedKnife].Offset
+    vm = knifeTemplate:FindFirstChild("Camera"):Clone()
+    vm.Name = selectedKnife
+    vm.Parent = Camera
+    disableCollisions(vm)
+    hideOriginalKnife(knife)
+    if myModel.Parent.Name == "Terrorists" then
+        local tGloves = RS.Assets.Weapons:FindFirstChild("T Glove")
+        attachAsset(tGloves, "Left Arm", "Left Arm", "Glove", CFrame.new(0, 0, -1.5))
+        attachAsset(tGloves, "Right Arm", "Right Arm", "Glove", CFrame.new(0, 0, -1.5))
+    else
+        local sleeves = RS.Assets.Sleeves:FindFirstChild("IDF")
+        local ctGloves = RS.Assets.Weapons:FindFirstChild("CT Glove")
+        attachAsset(sleeves, "Left Arm", "Left Arm", "Sleeve", CFrame.new(0, 0, 0.5))
+        attachAsset(ctGloves, "Left Arm", "Left Arm", "Glove", CFrame.new(0, 0, -1.5))
+        attachAsset(sleeves, "Right Arm", "Right Arm", "Sleeve", CFrame.new(0, 0, 0.5))
+        attachAsset(ctGloves, "Right Arm", "Right Arm", "Glove", CFrame.new(0, 0, -1.5))
+    end
+    local animController = vm:FindFirstChildOfClass("AnimationController") or vm:FindFirstChildOfClass("Animator")
+    animator = animController:FindFirstChildWhichIsA("Animator") or animController
+    local animFolder = RS.Assets.WeaponAnimations:FindFirstChild(selectedKnife):FindFirstChild("CameraAnimations")
+    equipAnim = animator:LoadAnimation(animFolder:FindFirstChild("Equip"))
+    idleAnim = animator:LoadAnimation(animFolder:FindFirstChild("Idle"))
+    inspectAnim = animator:LoadAnimation(animFolder:FindFirstChild("Inspect"))
+    HeavySwingAnim = animator:LoadAnimation(animFolder:FindFirstChild("Heavy Swing"))
+    Swing1Anim = animator:LoadAnimation(animFolder:FindFirstChild("Swing1"))
+    Swing2Anim = animator:LoadAnimation(animFolder:FindFirstChild("Swing2"))
+    vm:SetPrimaryPartCFrame(Camera.CFrame * CFrame.new(0, -1.5, 5))
+    TweenService:Create(vm.PrimaryPart, TweenInfo.new(0.2, Enum.EasingStyle.Quad, Enum.EasingDirection.Out), {
+        CFrame = Camera.CFrame * knifeOffset
+    }):Play()
+    equipAnim:Play()
+    playSound("Equip", "1")
+    CAS:BindAction(ACTION_INSPECT, handleAction, false, Enum.KeyCode.F)
+    CAS:BindAction(ACTION_ATTACK, handleAction, false, Enum.UserInputType.MouseButton1)
+end
+
+RunService.RenderStepped:Connect(function()
+    if not scriptRunning or not vm or not vm.PrimaryPart then return end
+    vm.PrimaryPart.CFrame = Camera.CFrame * knives[selectedKnife].Offset
+    if not (equipAnim and equipAnim.IsPlaying) and not inspecting and not swinging then
+        if idleAnim and not idleAnim.IsPlaying then
+            idleAnim:Play()
+        end
+    end
+end)
+
+task.spawn(function()
+    while true do
+        local living = isAlive()
+        local currentKnife = getKnifeInCamera()
+        if scriptRunning and living and currentKnife and not spawned then
+            spawnViewmodel(currentKnife)
+        elseif (not scriptRunning or not currentKnife or not living) and spawned then
+            removeViewmodel()
+        end
+        task.wait(0.1)
+    end
+end)
+
+local SkinsFolder = RS:FindFirstChild("Assets"):FindFirstChild("Skins")
+
+local function applyWeaponSkin(model)
+    if not model or not SkinChangerEnabled or not isAlive() then return end
+    local skinName = SelectedSkins[model.Name]
+    if not skinName then return end
+    pcall(function()
+        local skinFolder = SkinsFolder:FindFirstChild(model.Name)
+        if not skinFolder then return end
+        local skinType = skinFolder:FindFirstChild(skinName)
+        local sourceFolder = skinType and skinType:FindFirstChild("Camera") and skinType.Camera:FindFirstChild(WEAR)
+        if not sourceFolder then return end
+        for _, obj in Camera:GetChildren() do
+            local left = obj:FindFirstChild("Left Arm")
+            local right = obj:FindFirstChild("Right Arm")
+            if left or right then
+                local gloveFolder = SkinsFolder:FindFirstChild("Sports Gloves")
+                local gloveSkin = gloveFolder and gloveFolder:FindFirstChild(SelectedSkins["Sports Gloves"])
+                local gloveSource = gloveSkin and gloveSkin:FindFirstChild("Camera") and gloveSkin.Camera:FindFirstChild(WEAR)
+                if gloveSource then
+                    for _, side in {"Left Arm", "Right Arm"} do
+                        local arm = obj:FindFirstChild(side)
+                        local src = gloveSource:FindFirstChild(side)
+                        if arm and src then
+                            local gloveMesh = arm:FindFirstChild("Glove")
+                            if gloveMesh then
+                                local existing = gloveMesh:FindFirstChildOfClass("SurfaceAppearance")
+                                if existing then existing:Destroy() end
+                                local clone = src:Clone()
+                                clone.Name = "SurfaceAppearance"
+                                clone.Parent = gloveMesh
+                            end
+                        end
+                    end
+                end
+            end
+        end
+        if not GLOVES[model.Name] then
+            local weaponFolder = model:FindFirstChild("Weapon")
+            if weaponFolder then
+                for _, part in weaponFolder:GetDescendants() do
+                    if part:IsA("BasePart") then
+                        local newSkin = sourceFolder:FindFirstChild(part.Name)
+                        if newSkin then
+                            local existing = part:FindFirstChildOfClass("SurfaceAppearance")
+                            if existing then existing:Destroy() end
+                            local clone = newSkin:Clone()
+                            clone.Name = "SurfaceAppearance"
+                            clone.Parent = part
+                        end
+                    end
+                end
+            end
+        end
+        model:SetAttribute("SkinApplied", skinName)
+    end)
+end
+
+local function CreateSkinDropdown(weaponName, container, yPos)
+    local folder = SkinsFolder:FindFirstChild(weaponName)
+    if not folder then return end
+    local options = {}
+    for _, skin in folder:GetChildren() do
+        table.insert(options, skin.Name)
+    end
+    if not SelectedSkins[weaponName] then
+        SelectedSkins[weaponName] = options[1]
+    end
+    txt(container, weaponName, 14, 20, yPos, 120, 18, Color3.fromRGB(200,200,200), Enum.Font.Code)
+    local dp = dropdown(container, 160, yPos, 180, options, SelectedSkins[weaponName], function(opt)
+        SelectedSkins[weaponName] = opt
+        for _, obj in Camera:GetChildren() do
+            obj:SetAttribute("SkinApplied", nil)
+            applyWeaponSkin(obj)
+        end
+    end)
+    return dp
+end
+
+-- Skin Tab UI
+local skinPage = pages[5]
+txt(skinPage, "Skin Changer", 20, 20, 18, 200, 20, Color3.fromRGB(255,255,255), Enum.Font.Code)
+
+local skinToggle = checkbox(skinPage, 20, 50, "Enable Skin Changer", function(state)
+    SkinChangerEnabled = state
+    if not state then
+        for _, obj in Camera:GetChildren() do
+            obj:SetAttribute("SkinApplied", nil)
+        end
+    end
+end)
+
+local knifeToggle = checkbox(skinPage, 20, 90, "Enable Custom Knife", function(state)
+    scriptRunning = state
+    if not state then
+        removeViewmodel()
+    end
+end)
+
+txt(skinPage, "Selected Custom Knife", 14, 20, 130, 150, 18, Color3.fromRGB(200,200,200), Enum.Font.Code)
+local knifeDropdown = dropdown(skinPage, 180, 130, 180, {"Butterfly Knife", "Karambit", "M9 Bayonet", "Flip Knife", "Gut Knife"}, "Butterfly Knife", function(opt)
+    selectedKnife = opt
+    if spawned then
+        removeViewmodel()
+    end
+end)
+
+local scrollFrame = frame(skinPage, 0, 170, 549, 260, Color3.fromRGB(6,6,6))
+local scrollList = frame(scrollFrame, 0, 0, 549, 0, Color3.fromRGB(6,6,6))
+local scrollingEnabled = false
+local scrollOffset = 0
+local scrollDragStart = nil
+local scrollStartPos = nil
+
+local function addSkinSection(title, weaponTable, yStart)
+    local sectionY = yStart
+    txt(scrollList, title, 16, 20, sectionY, 200, 20, Color3.fromRGB(255,255,255), Enum.Font.Code)
+    sectionY = sectionY + 30
+    for weapon in pairs(weaponTable) do
+        CreateSkinDropdown(weapon, scrollList, sectionY)
+        sectionY = sectionY + 40
+    end
+    return sectionY
+end
+
+local yOffset = 10
+yOffset = addSkinSection("Knives", KNIVES, yOffset)
+yOffset = addSkinSection("Gloves", GLOVES, yOffset)
+yOffset = addSkinSection("CT Weapons", CT_ONLY, yOffset)
+yOffset = addSkinSection("Shared Weapons", SHARED, yOffset)
+
+for _, folder in SkinsFolder:GetChildren() do
+    local n = folder.Name
+    if not IgnoreFolders[n] and not KNIVES[n] and not GLOVES[n] and not CT_ONLY[n] and not SHARED[n] then
+        txt(scrollList, "Other: " .. n, 14, 20, yOffset, 200, 18, Color3.fromRGB(200,200,200), Enum.Font.Code)
+        yOffset = yOffset + 25
+        CreateSkinDropdown(n, scrollList, yOffset)
+        yOffset = yOffset + 40
+    end
+end
+
+scrollList.Size = UDim2.new(1, 0, 0, yOffset + 20)
+
+local scrollBar = frame(scrollFrame, 535, 0, 10, scrollFrame.Size.Y.Offset, Color3.fromRGB(30,30,30))
+round(scrollBar, 5)
+local scrollThumb = frame(scrollBar, 0, 0, 10, 50, Color3.fromRGB(100,100,100))
+round(scrollThumb, 5)
+
+local function updateScroll()
+    local maxOffset = math.max(0, scrollList.Size.Y.Offset - scrollFrame.Size.Y.Offset)
+    local percent = math.clamp(scrollOffset / maxOffset, 0, 1)
+    scrollList.Position = UDim2.new(0, 0, 0, -scrollOffset)
+    scrollThumb.Position = UDim2.new(0, 0, 0, percent * (scrollFrame.Size.Y.Offset - scrollThumb.Size.Y.Offset))
+    scrollThumb.Visible = maxOffset > 0
+    scrollBar.Visible = maxOffset > 0
+end
+
+scrollFrame.CanvasSize = UDim2.new(0, 0, 0, scrollList.Size.Y.Offset)
+scrollFrame.ScrollBarThickness = 0
+
+scrollFrame.InputMouseWheel:Connect(function(_, delta)
+    if not scrollFrame.Visible then return end
+    local maxOffset = math.max(0, scrollList.Size.Y.Offset - scrollFrame.Size.Y.Offset)
+    scrollOffset = math.clamp(scrollOffset - delta * 20, 0, maxOffset)
+    updateScroll()
+end)
+
+scrollThumb.InputBegan:Connect(function(i)
+    if i.UserInputType == Enum.UserInputType.MouseButton1 then
+        scrollingEnabled = true
+        scrollDragStart = i.Position
+        scrollStartPos = scrollThumb.Position
+        i.Changed:Connect(function()
+            if i.UserInputState == Enum.UserInputState.End then
+                scrollingEnabled = false
+            end
+        end)
+    end
+end)
+
+UIS.InputChanged:Connect(function(i)
+    if scrollingEnabled and i.UserInputType == Enum.UserInputType.MouseMovement then
+        local delta = i.Position.Y - scrollDragStart.Y
+        local trackHeight = scrollFrame.Size.Y.Offset - scrollThumb.Size.Y.Offset
+        local percent = math.clamp((scrollStartPos.Y.Offset + delta) / trackHeight, 0, 1)
+        local maxOffset = math.max(0, scrollList.Size.Y.Offset - scrollFrame.Size.Y.Offset)
+        scrollOffset = percent * maxOffset
+        updateScroll()
+    end
+end)
+
+Camera.ChildAdded:Connect(function(obj)
+    if not SkinChangerEnabled or not isAlive() then return end
+    task.wait(0.1)
+    applyWeaponSkin(obj)
+end)
+
+task.spawn(function()
+    while true do
+        task.wait(0.5)
+        if SkinChangerEnabled and isAlive() then
+            for _, obj in Camera:GetChildren() do
+                if SelectedSkins[obj.Name] and obj:GetAttribute("SkinApplied") ~= SelectedSkins[obj.Name] then
+                    applyWeaponSkin(obj)
+                end
+            end
+        end
+    end
+end)
+
+-- Aimbot Tab (Original)
 txt(pages[1],"Aimbot",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local aimbotEnabled=false
@@ -369,11 +848,6 @@ local triggerBotEnabled=false
 
 local aimbotConn=nil
 local triggerBotConn=nil
-local aimbotCB=nil
-local aimbotDropdown=nil
-local aimbotFovSlider=nil
-local aimbotSmoothSlider=nil
-local triggerBotCB=nil
 local targetIdx=1
 local targetParts={"Head","Torso","HumanoidRootPart","LeftHand","RightHand","LeftFoot","RightFoot"}
 
@@ -413,7 +887,7 @@ local function fireTool()
     end
 end
 
-aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
+local aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
     aimbotEnabled=state
     if aimbotEnabled then
         if aimbotConn then aimbotConn:Disconnect() end
@@ -446,7 +920,7 @@ aimbotCB=checkbox(pages[1],20,60,"Enable Aimbot",function(state)
     end
 end)
 
-triggerBotCB=checkbox(pages[1],20,90,"Trigger Bot",function(state)
+local triggerBotCB=checkbox(pages[1],20,90,"Trigger Bot",function(state)
     triggerBotEnabled=state
     if triggerBotEnabled then
         if triggerBotConn then triggerBotConn:Disconnect() end
@@ -473,7 +947,7 @@ triggerBotCB=checkbox(pages[1],20,90,"Trigger Bot",function(state)
 end)
 
 txt(pages[1],"Target",14,20,130,80,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-aimbotDropdown=btn(pages[1],targetParts[targetIdx],20,150,200,30)
+local aimbotDropdown=btn(pages[1],targetParts[targetIdx],20,150,200,30)
 aimbotDropdown.MouseButton1Click:Connect(function()
     targetIdx=targetIdx+1
     if targetIdx>#targetParts then targetIdx=1 end
@@ -482,15 +956,16 @@ aimbotDropdown.MouseButton1Click:Connect(function()
 end)
 
 txt(pages[1],"Aimbot FOV",14,20,195,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-aimbotFovSlider=slider(pages[1],20,215,200,30,500,200,function(v)
+local aimbotFovSlider=slider(pages[1],20,215,200,30,500,200,function(v)
     aimbotFov=v
 end)
 
 txt(pages[1],"Smoothness",14,20,260,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-aimbotSmoothSlider=slider(pages[1],20,280,200,0.05,0.5,0.15,function(v)
+local aimbotSmoothSlider=slider(pages[1],20,280,200,0.05,0.5,0.15,function(v)
     aimbotSmoothness=v
 end)
 
+-- Movement Tab (Original)
 txt(pages[2],"Movement",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local flyEnabled=false
@@ -506,14 +981,6 @@ local superSprintEnabled=false
 local superSprintSpeed=30
 local rapidFireEnabled=false
 local rapidFireConn=nil
-
-local flyCB=nil
-local flySpeedSlider=nil
-local superJumpCB=nil
-local noClipCB=nil
-local superSprintCB=nil
-local superSprintSlider=nil
-local rapidFireCB=nil
 
 local function startFly()
     local char=Player.Character
@@ -584,7 +1051,7 @@ local function stopFly()
     end
 end
 
-flyCB=checkbox(pages[2],20,60,"Fly",function(state)
+local flyCB=checkbox(pages[2],20,60,"Fly",function(state)
     flyEnabled=state
     if flyEnabled then
         startFly()
@@ -594,18 +1061,18 @@ flyCB=checkbox(pages[2],20,60,"Fly",function(state)
 end)
 
 txt(pages[2],"Fly Speed",14,20,100,80,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-flySpeedSlider=slider(pages[2],20,120,200,10,200,50,function(v)
+local flySpeedSlider=slider(pages[2],20,120,200,10,200,50,function(v)
     flySpeed=v
 end)
 
-superJumpCB=checkbox(pages[2],20,155,"Super Jump",function(state)
+local superJumpCB=checkbox(pages[2],20,155,"Super Jump",function(state)
     superJumpEnabled=state
     if Player.Character and Player.Character:FindFirstChild("Humanoid") then
         Player.Character.Humanoid.JumpPower=state and 200 or 50
     end
 end)
 
-noClipCB=checkbox(pages[2],20,195,"NoClip",function(state)
+local noClipCB=checkbox(pages[2],20,195,"NoClip",function(state)
     noClipEnabled=state
     if noClipEnabled then
         noclipConn=RunService.Stepped:Connect(function()
@@ -622,7 +1089,7 @@ noClipCB=checkbox(pages[2],20,195,"NoClip",function(state)
     end
 end)
 
-superSprintCB=checkbox(pages[2],20,235,"Super Sprint",function(state)
+local superSprintCB=checkbox(pages[2],20,235,"Super Sprint",function(state)
     superSprintEnabled=state
     if Player.Character and Player.Character:FindFirstChild("Humanoid") then
         if state then
@@ -634,13 +1101,14 @@ superSprintCB=checkbox(pages[2],20,235,"Super Sprint",function(state)
 end)
 
 txt(pages[2],"Sprint Speed",14,20,270,80,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-superSprintSlider=slider(pages[2],20,290,200,16,100,30,function(v)
+local superSprintSlider=slider(pages[2],20,290,200,16,100,30,function(v)
     superSprintSpeed=v
     if superSprintEnabled and Player.Character and Player.Character:FindFirstChild("Humanoid") then
         Player.Character.Humanoid.WalkSpeed=v
     end
 end)
 
+-- Visuals Tab (Original)
 txt(pages[3],"Visuals",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local espEnabled=false
@@ -651,12 +1119,7 @@ local fovCircleColor=Color3.fromRGB(0,0,0)
 local tracerColor=Color3.fromRGB(255,255,255)
 local fovRadius=200
 
-local espCB=nil
-local tracersCB=nil
-local fovCircleCB=nil
-local fovRadiusSlider=nil
 local espRefreshConn=nil
-
 local fovCircle=Drawing.new("Circle")
 fovCircle.Visible=false
 fovCircle.Color=fovCircleColor
@@ -664,7 +1127,6 @@ fovCircle.Thickness=1
 fovCircle.Transparency=0.7
 fovCircle.Radius=fovRadius
 fovCircle.Position=Vector2.new(Camera.ViewportSize.X/2,Camera.ViewportSize.Y/2)
-
 local tracers={}
 
 local function addHighlight(character)
@@ -739,7 +1201,7 @@ Players.PlayerAdded:Connect(function(plr)
     end)
 end)
 
-espCB=checkbox(pages[3],20,60,"Player ESP",function(state)
+local espCB=checkbox(pages[3],20,60,"Player ESP",function(state)
     espEnabled=state
     if espEnabled then
         refreshAllESP()
@@ -771,7 +1233,7 @@ for i,col in ipairs(espColors) do
     end)
 end
 
-tracersCB=checkbox(pages[3],20,150,"Tracers",function(state)
+local tracersCB=checkbox(pages[3],20,150,"Tracers",function(state)
     tracersEnabled=state
     if not tracersEnabled then
         for plr,drawing in pairs(tracers) do
@@ -795,13 +1257,13 @@ for i,col in ipairs(tracerColors) do
     end)
 end
 
-fovCircleCB=checkbox(pages[3],20,240,"FOV Circle",function(state)
+local fovCircleCB=checkbox(pages[3],20,240,"FOV Circle",function(state)
     fovCircleEnabled=state
     fovCircle.Visible=state
 end)
 
 txt(pages[3],"FOV Radius",14,20,270,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-fovRadiusSlider=slider(pages[3],20,290,200,30,500,200,function(v)
+local fovRadiusSlider=slider(pages[3],20,290,200,30,500,200,function(v)
     fovRadius=v
 end)
 
@@ -829,6 +1291,7 @@ RunService.RenderStepped:Connect(function()
     updateTracers()
 end)
 
+-- Weapons Tab (Original)
 txt(pages[4],"Weapons",20,20,18,200,20,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local weaponImageContainer=frame(pages[4],549-130,0,130,130,Color3.fromRGB(10,10,10))
@@ -851,14 +1314,6 @@ local weaponNoSpread=false
 local weaponInstantReload=false
 local weaponDamageMultiplier=1
 local weaponFireRateMultiplier=1
-
-local weaponModsCB=nil
-local noDelayCB=nil
-local rapidTriggerCB=nil
-local noSpreadCB=nil
-local instantReloadCB=nil
-local damageSlider=nil
-local fireRateSlider=nil
 
 local weaponModConn=nil
 local originalWeaponProperties={}
@@ -974,7 +1429,7 @@ local function removeWeaponMods(weapon)
     end
 end
 
-weaponModsCB=checkbox(pages[4],20,60,"Weapon Mods",function(state)
+local weaponModsCB=checkbox(pages[4],20,60,"Weapon Mods",function(state)
     weaponModsEnabled=state
     if not weaponModsEnabled then
         local weapon=getCurrentWeapon()
@@ -1003,7 +1458,7 @@ weaponModsCB=checkbox(pages[4],20,60,"Weapon Mods",function(state)
     end
 end)
 
-noDelayCB=checkbox(pages[4],20,95,"No Weapon Delay",function(state)
+local noDelayCB=checkbox(pages[4],20,95,"No Weapon Delay",function(state)
     noWeaponDelay=state
     local weapon=getCurrentWeapon()
     if weapon and weaponModsEnabled and state then
@@ -1013,11 +1468,11 @@ noDelayCB=checkbox(pages[4],20,95,"No Weapon Delay",function(state)
     end
 end)
 
-rapidTriggerCB=checkbox(pages[4],20,130,"Rapid Trigger",function(state)
+local rapidTriggerCB=checkbox(pages[4],20,130,"Rapid Trigger",function(state)
     weaponRapidTrigger=state
 end)
 
-noSpreadCB=checkbox(pages[4],20,165,"No Spread",function(state)
+local noSpreadCB=checkbox(pages[4],20,165,"No Spread",function(state)
     weaponNoSpread=state
     local weapon=getCurrentWeapon()
     if weapon and weaponModsEnabled then
@@ -1029,12 +1484,12 @@ noSpreadCB=checkbox(pages[4],20,165,"No Spread",function(state)
     end
 end)
 
-instantReloadCB=checkbox(pages[4],20,200,"Instant Reload",function(state)
+local instantReloadCB=checkbox(pages[4],20,200,"Instant Reload",function(state)
     weaponInstantReload=state
 end)
 
 txt(pages[4],"Damage Multiplier",14,20,235,120,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-damageSlider=slider(pages[4],20,255,200,1,10,1,function(v)
+local damageSlider=slider(pages[4],20,255,200,1,10,1,function(v)
     weaponDamageMultiplier=v
     local weapon=getCurrentWeapon()
     if weapon and weaponModsEnabled then
@@ -1044,7 +1499,7 @@ damageSlider=slider(pages[4],20,255,200,1,10,1,function(v)
 end)
 
 txt(pages[4],"Fire Rate Multiplier",14,20,290,120,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-fireRateSlider=slider(pages[4],20,310,200,1,5,1,function(v)
+local fireRateSlider=slider(pages[4],20,310,200,1,5,1,function(v)
     weaponFireRateMultiplier=v
     local function modifyFireRate()
         for _,v in pairs(getgc(true)) do
@@ -1061,12 +1516,13 @@ fireRateSlider=slider(pages[4],20,310,200,1,5,1,function(v)
     end
 end)
 
-txt(pages[5],"Settings",18,20,16,160,18,Color3.fromRGB(255,255,255),Enum.Font.Code)
+-- Settings Tab (Original)
+txt(pages[6],"Settings",18,20,16,160,18,Color3.fromRGB(255,255,255),Enum.Font.Code)
 
 local blurOn=false
-local blurToggle=btn(pages[5],"",20,42,18,18)
+local blurToggle=btn(pages[6],"",20,42,18,18)
 blurToggle.TextSize=16
-txt(pages[5],"Enable Blur",16,46,42,160,18,Color3.fromRGB(230,230,230),Enum.Font.Code)
+txt(pages[6],"Enable Blur",16,46,42,160,18,Color3.fromRGB(230,230,230),Enum.Font.Code)
 
 blurToggle.MouseButton1Click:Connect(function()
     blurOn=not blurOn
@@ -1086,13 +1542,13 @@ blurToggle.MouseButton1Click:Connect(function()
 end)
 
 local fieldOfView=70
-txt(pages[5],"Field of View",14,20,80,120,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
-local fovSlider=slider(pages[5],20,100,200,30,120,70,function(v)
+txt(pages[6],"Field of View",14,20,80,120,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+local fovSlider=slider(pages[6],20,100,200,30,120,70,function(v)
     fieldOfView=v
     Camera.FieldOfView=v
 end)
 
-txt(pages[5],"Themes",14,20,140,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
+txt(pages[6],"Themes",14,20,140,100,18,Color3.fromRGB(200,200,200),Enum.Font.Code)
 
 local currentTheme="Default"
 local themes={
@@ -1159,7 +1615,7 @@ end
 
 local themeY=160
 for i,t in ipairs(themes) do
-    local themeBtn=btn(pages[5],t.name,20,themeY,120,30)
+    local themeBtn=btn(pages[6],t.name,20,themeY,120,30)
     themeBtn.MouseButton1Click:Connect(function()
         applyTheme(t.name)
     end)
@@ -1170,8 +1626,6 @@ local watermarkEnabled=false
 local autoExecuteEnabled=false
 local watermarkText="Clownware | discord.gg/clownffware"
 
-local watermarkCB=nil
-local autoExecuteCB=nil
 local watermarkGui=nil
 
 local function createWatermark()
@@ -1232,7 +1686,7 @@ local function createWatermark()
     end)
 end
 
-watermarkCB=checkbox(pages[5],20,340,"Watermark",function(state)
+local watermarkCB=checkbox(pages[6],20,340,"Watermark",function(state)
     watermarkEnabled=state
     if watermarkGui then
         watermarkGui.Enabled=state
@@ -1241,7 +1695,7 @@ watermarkCB=checkbox(pages[5],20,340,"Watermark",function(state)
     end
 end)
 
-autoExecuteCB=checkbox(pages[5],20,375,"Auto-Execute",function(state)
+local autoExecuteCB=checkbox(pages[6],20,375,"Auto-Execute",function(state)
     autoExecuteEnabled=state
 end)
 
@@ -1286,8 +1740,14 @@ local function saveConfig()
         weaponNoSpread=weaponNoSpread,
         weaponInstantReload=weaponInstantReload,
         weaponDamageMultiplier=weaponDamageMultiplier,
-        weaponFireRateMultiplier=weaponFireRateMultiplier
+        weaponFireRateMultiplier=weaponFireRateMultiplier,
+        SkinChangerEnabled=SkinChangerEnabled,
+        scriptRunning=scriptRunning,
+        selectedKnife=selectedKnife
     }
+    for k,v in pairs(SelectedSkins) do
+        config["skin_"..k]=v
+    end
     if writefile then
         writefile(configPath,HttpService:JSONEncode(config))
     end
@@ -1326,7 +1786,6 @@ local function loadConfig()
     if noClipCB then noClipCB.Set(noClipEnabled) end
     if superSprintCB then superSprintCB.Set(superSprintEnabled) end
     if superSprintSlider then superSprintSlider.Set(superSprintSpeed) end
-    if rapidFireCB then rapidFireCB.Set(rapidFireEnabled) end
     
     if superJumpEnabled and Player.Character and Player.Character:FindFirstChild("Humanoid") then
         Player.Character.Humanoid.JumpPower=200
@@ -1339,18 +1798,6 @@ local function loadConfig()
         stopFly()
         wait(0.2)
         startFly()
-    end
-    
-    if rapidFireEnabled then
-        if rapidFireConn then
-            rapidFireConn:Disconnect()
-            rapidFireConn=nil
-        end
-        rapidFireConn=RunService.RenderStepped:Connect(function()
-            if rapidFireEnabled and UIS:IsMouseButtonPressed(Enum.UserInputType.MouseButton1) then
-                fireTool()
-            end
-        end)
     end
     
     espEnabled=data.espEnabled
@@ -1414,10 +1861,24 @@ local function loadConfig()
     if instantReloadCB then instantReloadCB.Set(weaponInstantReload) end
     if damageSlider then damageSlider.Set(weaponDamageMultiplier) end
     if fireRateSlider then fireRateSlider.Set(weaponFireRateMultiplier) end
+    
+    SkinChangerEnabled=data.SkinChangerEnabled or false
+    scriptRunning=data.scriptRunning or false
+    selectedKnife=data.selectedKnife or "Butterfly Knife"
+    if skinToggle then skinToggle.Set(SkinChangerEnabled) end
+    if knifeToggle then knifeToggle.Set(scriptRunning) end
+    if knifeDropdown then knifeDropdown.Set(selectedKnife) end
+    
+    for k,v in pairs(data) do
+        if string.sub(k,1,5)=="skin_" then
+            local weapon=string.sub(k,6)
+            SelectedSkins[weapon]=v
+        end
+    end
 end
 
-btn(pages[5],"Save Config",20,420,120,30).MouseButton1Click:Connect(saveConfig)
-btn(pages[5],"Load Config",150,420,120,30).MouseButton1Click:Connect(loadConfig)
+btn(pages[6],"Save Config",20,420,120,30).MouseButton1Click:Connect(saveConfig)
+btn(pages[6],"Load Config",150,420,120,30).MouseButton1Click:Connect(loadConfig)
 
 local dragging=false
 local dragStart,startPos,dragInput
